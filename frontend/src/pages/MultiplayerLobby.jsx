@@ -72,15 +72,15 @@ export default function MultiplayerLobby() {
   }, [copied])
 
   const handleCreate = () => {
-    if (!nickname.trim()) return setError('Enter your nickname.')
+    if (!nickname.trim()) return setError('Enter your badge name.')
     setError('')
     setLoading(true)
     emit('create-room', { nickname: nickname.trim() })
   }
 
   const handleJoin = () => {
-    if (!nickname.trim()) return setError('Enter your nickname.')
-    if (!inputCode.trim()) return setError('Enter a room code.')
+    if (!nickname.trim()) return setError('Enter your badge name.')
+    if (!inputCode.trim()) return setError('Enter an access code.')
     setError('')
     setLoading(true)
     emit('join-room', { code: inputCode.trim().toUpperCase(), nickname: nickname.trim() })
@@ -90,7 +90,7 @@ export default function MultiplayerLobby() {
     if (!wordInput.trim()) return setError('Enter a word.')
     if (!/^[a-zA-Z]+$/.test(wordInput)) return setError('Use letters only.')
     emit('submit-word', { code: roomCode, word: wordInput.trim() })
-    setInfo('Word submitted. Waiting for the guesser.')
+    setInfo('Evidence logged. Waiting for partner.')
     setWordInput('')
   }
 
@@ -116,244 +116,206 @@ export default function MultiplayerLobby() {
   const usedLetters = new Set(gameState?.guesses || [])
   const stepText =
     screen === 'home'
-      ? 'Choose whether to create or join a room.'
+      ? 'Sign the ledger to open a new line of inquiry or join an existing case.'
       : screen === 'create'
-        ? 'Share the room code and wait for the second player.'
+        ? 'Distribute this access code to your partner.'
         : screen === 'word-entry'
-          ? 'Set the secret word to start the round.'
-          : 'Track the live round and request a rematch when it ends.'
+          ? 'Log the classified word to begin the interrogation.'
+          : 'Monitor the live investigation. Request a new file when concluded.'
 
   return (
-    <div className="app-shell">
-      <div className="page-wrap mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10 lg:px-8">
-        <div className="hero-grid fade-in-up">
-          <section className="glass-panel grain-panel panel-strong arcade-card p-6 sm:p-8 lg:p-10">
-            <button onClick={() => navigate('/')} className="ghost-btn arcade-btn px-0 py-2 text-sm font-bold">
-              Back to home
-            </button>
+    <div className="app-shell p-4 sm:p-8">
+      <div className="page-wrap mx-auto max-w-5xl">
+        <div className="mb-8 flex flex-wrap items-center justify-between gap-3 border-b-4 border-dashed border-[#2c2825] pb-4">
+          <button onClick={() => navigate('/')} className="text-[#2c2825] hover:opacity-70 font-bold uppercase tracking-widest text-sm transition-opacity">
+            &larr; ARCHIVES
+          </button>
+          <span className="font-bold border-2 border-[#2c2825] px-2 py-1 uppercase bg-[#2c2825] text-[#e3d5c1]">
+            MULTI-AGENT SECURE LINE
+          </span>
+        </div>
 
-            <div className="mt-5">
-              <p className="section-label neon-text-orange">Multiplayer lobby</p>
-              <h1 className="page-title neon-text mt-3 text-balance">Room codes, clearer roles, less waiting friction.</h1>
-              <p className="mt-4 max-w-2xl text-base leading-7 text-muted sm:text-lg">
-                The same socket flow, but with a more guided layout for creating rooms, joining fast,
-                and understanding who does what next.
-              </p>
-            </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 fade-in-up">
+          {/* ── Left: Information Ledger ─────────────────────────── */}
+          <section className="glass-panel p-8 rotate-[1deg]">
+            <p className="font-bold uppercase tracking-widest text-sm opacity-60 mb-2">Protocol 9</p>
+            <h1 className="text-4xl font-black uppercase tracking-widest mb-6">Partner <br/>Inquiry Line</h1>
+            <p className="font-bold uppercase tracking-wider text-sm mb-8 opacity-80 border-l-4 border-[#2c2825] pl-4">
+              Secure socket connection established. Coordinate with a remote agent. One agent logs the evidence; the other extracts the truth.
+            </p>
 
-            <div className="mt-8 grid gap-4 sm:grid-cols-3">
-              <div className="stat-card stat-box">
-                <p className="section-label stat-label">1. Connect</p>
-                <p className="stat-value mt-2 text-lg font-black">Name yourself</p>
-                <p className="stat-label mt-1 text-sm text-muted">Your nickname is shared in the room.</p>
+            <div className="space-y-6">
+              <div className="border-2 border-[#2c2825] p-4 bg-[#e3d5c1] shadow-[4px_4px_0px_#2c2825]">
+                <p className="section-label mb-2">1. Badge In</p>
+                <p className="font-bold uppercase text-sm">Provide your operative nickname.</p>
               </div>
-              <div className="stat-card stat-box">
-                <p className="section-label stat-label">2. Match</p>
-                <p className="stat-value mt-2 text-lg font-black">Create or join</p>
-                <p className="stat-label mt-1 text-sm text-muted">Use a short code to sync both players.</p>
-              </div>
-              <div className="stat-card stat-box">
-                <p className="section-label stat-label">3. Play</p>
-                <p className="stat-value mt-2 text-lg font-black">Swap roles each round</p>
-                <p className="stat-label mt-1 text-sm text-muted">Word giver and guesser stay obvious.</p>
+              <div className="border-2 border-[#2c2825] p-4 bg-[#e3d5c1] shadow-[4px_4px_0px_#2c2825]">
+                <p className="section-label mb-2">2. Establish Link</p>
+                <p className="font-bold uppercase text-sm">Create a secure line or use a known access code.</p>
               </div>
             </div>
-
-            <div className="arcade-card mt-8 rounded border border-[var(--line)] bg-gray-900 p-5">
-              <p className="section-label neon-text-orange">Current step</p>
-              <p className="mt-2 text-lg font-bold text-gray-100">{stepText}</p>
-              {info && <p className="mt-3 text-sm font-semibold text-[#146c68]">{info}</p>}
-              {error && <p className="mt-3 shake text-sm font-semibold text-[#bb4d3f]">{error}</p>}
+            
+            <div className="mt-8 border-t-2 border-dashed border-[#2c2825] pt-6">
+              <p className="section-label">Current Status</p>
+              <p className="font-bold uppercase text-lg mt-2">{stepText}</p>
+              {info && <p className="font-bold text-[#2d8a5f] uppercase text-sm mt-2">{info}</p>}
+              {error && <p className="font-bold text-[#8b0000] uppercase text-sm mt-2 border-2 border-[#8b0000] p-2 shake inline-block">{error}</p>}
             </div>
           </section>
 
-          <section className="panel-dark arcade-card p-5 sm:p-7">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="section-label neon-text-orange text-[rgba(246,240,231,0.64)]">Room flow</p>
-                <h2 className="display-title neon-text mt-2 text-[#fff6ea]">Guide both players through the round.</h2>
-              </div>
-              <span className="rounded border border-[#00ff88]/30 px-3 py-1 text-sm font-bold neon-text-orange">
-                Live
-              </span>
-            </div>
-
+          {/* ── Right: Action Terminal ───────────────────────────────── */}
+          <section className="glass-panel p-8 rotate-[-1deg] bg-[#e3d5c1] border-[#2c2825] flex flex-col justify-center">
+            
             {screen === 'home' && (
-              <div className="mt-6 space-y-4">
-                <input
-                  value={nickname}
-                  onChange={(e) => setNickname(e.target.value)}
-                  placeholder="Your nickname"
-                  className="app-input"
-                />
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <button onClick={handleCreate} disabled={loading} className="primary-btn arcade-btn px-5">
-                    {loading ? 'Creating...' : 'Create room'}
+              <div className="space-y-6">
+                <div>
+                  <p className="section-label">Operative Profile</p>
+                  <input
+                    value={nickname}
+                    onChange={(e) => setNickname(e.target.value.toUpperCase())}
+                    placeholder="ENTER BADGE NAME"
+                    className="glass-input uppercase"
+                  />
+                </div>
+                <div className="flex flex-col gap-4 pt-4">
+                  <button onClick={handleCreate} disabled={loading} className="btn-primary py-4">
+                    {loading ? 'ESTABLISHING...' : 'OPEN NEW SECURE LINE'}
                   </button>
                   <button
                     onClick={() => {
                       setError('')
                       setScreen('join')
                     }}
-                    className="secondary-btn arcade-btn arcade-btn-orange px-5"
+                    className="btn-secondary py-4"
                   >
-                    Join room
+                    ENTER ACCESS CODE
                   </button>
                 </div>
               </div>
             )}
 
             {screen === 'join' && (
-              <div className="mt-6 space-y-4">
-                <input
-                  value={nickname}
-                  onChange={(e) => setNickname(e.target.value)}
-                  placeholder="Your nickname"
-                  className="app-input"
-                />
-                <input
-                  value={inputCode}
-                  onChange={(e) => setInputCode(e.target.value.toUpperCase())}
-                  placeholder="Room code"
-                  maxLength={6}
-                  className="app-input app-input-mono text-center text-xl"
-                />
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <button onClick={handleJoin} disabled={loading} className="primary-btn arcade-btn px-5">
-                    {loading ? 'Joining...' : 'Join game'}
+              <div className="space-y-6">
+                <div>
+                  <p className="section-label">Operative Profile</p>
+                  <input
+                    value={nickname}
+                    onChange={(e) => setNickname(e.target.value.toUpperCase())}
+                    placeholder="ENTER BADGE NAME"
+                    className="glass-input uppercase"
+                  />
+                </div>
+                <div>
+                  <p className="section-label">Access Code</p>
+                  <input
+                    value={inputCode}
+                    onChange={(e) => setInputCode(e.target.value.toUpperCase())}
+                    placeholder="6-LETTER CODE"
+                    maxLength={6}
+                    className="glass-input uppercase text-center font-black tracking-widest text-2xl"
+                  />
+                </div>
+                <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                  <button onClick={handleJoin} disabled={loading} className="btn-primary flex-1 py-4">
+                    {loading ? 'JOINING...' : 'CONNECT'}
                   </button>
-                  <button onClick={() => setScreen('home')} className="secondary-btn arcade-btn arcade-btn-orange px-5">
-                    Back
+                  <button onClick={() => setScreen('home')} className="btn-secondary flex-1 py-4">
+                    CANCEL
                   </button>
                 </div>
               </div>
             )}
 
             {screen === 'create' && (
-              <div className="arcade-card mt-6 rounded border border-[#00ff88]/30 bg-gray-950 p-6 text-center">
-                <p className="section-label neon-text-orange text-[rgba(246,240,231,0.64)]">Share this room code</p>
-                <p className="app-input-mono mt-4 text-5xl font-black tracking-[0.26em] text-[#fff6ea]">
+              <div className="text-center space-y-8">
+                <p className="section-label">Access Code Generated</p>
+                <p className="text-6xl font-black tracking-[0.2em] border-y-4 border-[#2c2825] py-6 my-8">
                   {roomCode}
                 </p>
-                <p className="mt-3 text-sm text-[#d7c8bb]">Waiting for the second player to join.</p>
-                <button onClick={handleCopyRoomCode} className="secondary-btn arcade-btn arcade-btn-orange mt-5 px-5 text-sm">
-                  {copied ? 'Copied' : 'Copy code'}
+                <p className="font-bold uppercase text-sm opacity-80">Awaiting partner connection...</p>
+                <button onClick={handleCopyRoomCode} className="btn-secondary py-3 px-8 text-sm">
+                  {copied ? 'COPIED TO CLIPBOARD' : 'COPY CODE'}
                 </button>
               </div>
             )}
 
             {screen === 'word-entry' && role === 'word-giver' && (
-              <div className="mt-6 space-y-4">
-                <div className="arcade-card rounded border border-[#00ff88]/30 bg-gray-950 p-4">
-                  <p className="section-label neon-text-orange text-[rgba(246,240,231,0.64)]">You are the word giver</p>
-                  <p className="mt-2 text-sm text-[#d7c8bb]">
-                    Enter a word once, then hand the device over or wait for the remote guesser.
-                  </p>
+              <div className="space-y-6">
+                <p className="section-label">You are the Informant</p>
+                <p className="font-bold uppercase text-sm mb-6">Type the secret evidence word. Your partner will attempt to extract it.</p>
+                
+                <div>
+                  <input
+                    value={wordInput}
+                    onChange={(e) => setWordInput(e.target.value.replace(/[^a-zA-Z]/g, '').toUpperCase())}
+                    placeholder="ENTER SECRET WORD"
+                    maxLength={20}
+                    className="glass-input uppercase text-center font-black tracking-widest text-2xl"
+                  />
                 </div>
-                <div className="arcade-card rounded border border-[#00ff88]/30 bg-gray-950 p-4">
-                  <p className="section-label neon-text-orange text-[rgba(246,240,231,0.64)]">Room code</p>
-                  <p className="app-input-mono mt-2 text-2xl font-black text-[#fff6ea]">{roomCode}</p>
-                </div>
-                <input
-                  value={wordInput}
-                  onChange={(e) => setWordInput(e.target.value.replace(/[^a-zA-Z]/g, ''))}
-                  placeholder="Type a secret word"
-                  maxLength={20}
-                  className="app-input app-input-mono text-center text-xl"
-                />
-                <button onClick={handleSubmitWord} className="primary-btn arcade-btn w-full px-5">
-                  Submit word
+                <button onClick={handleSubmitWord} className="btn-primary w-full py-4 mt-4">
+                  LOG EVIDENCE
                 </button>
               </div>
             )}
 
             {screen === 'game' && gameState && (
-              <div className="mt-6 space-y-4">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="arcade-card rounded border border-[#00ff88]/30 bg-gray-950 p-4">
-                    <p className="section-label neon-text-orange text-[rgba(246,240,231,0.64)]">Room</p>
-                    <p className="app-input-mono mt-2 text-2xl font-black text-[#fff6ea]">{roomCode}</p>
+              <div className="space-y-8">
+                <div className="grid grid-cols-2 gap-4 border-b-2 border-[#2c2825] pb-6">
+                  <div>
+                    <p className="text-xs font-bold uppercase opacity-60">Informant</p>
+                    <p className="font-black text-xl">{gameState.wordGiver}</p>
                   </div>
-                  <div className="arcade-card rounded border border-[#00ff88]/30 bg-gray-950 p-4">
-                    <p className="section-label neon-text-orange text-[rgba(246,240,231,0.64)]">Role</p>
-                    <p className="mt-2 text-lg font-black text-[#fff6ea]">
-                      {isGuesser ? 'Guesser' : 'Word giver'}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="arcade-card rounded border border-[#00ff88]/30 bg-gray-950 p-4">
-                    <p className="section-label neon-text-orange text-[rgba(246,240,231,0.64)]">Word giver</p>
-                    <p className="mt-2 text-lg font-black text-[#f7d7c0]">{gameState.wordGiver}</p>
-                  </div>
-                  <div className="arcade-card rounded border border-[#00ff88]/30 bg-gray-950 p-4">
-                    <p className="section-label neon-text-orange text-[rgba(246,240,231,0.64)]">Guesser</p>
-                    <p className="mt-2 text-lg font-black text-[#fff6ea]">
-                      {gameState.guesser || 'Waiting'}
-                    </p>
+                  <div>
+                    <p className="text-xs font-bold uppercase opacity-60">Extractor</p>
+                    <p className="font-black text-xl">{gameState.guesser || 'WAITING...'}</p>
                   </div>
                 </div>
 
                 {gameState.maskedWord && (
-                  <div className="arcade-card rounded border border-[#00ff88]/30 bg-gray-950 p-5 text-center sm:p-6">
-                    <p className="section-label neon-text-orange text-[rgba(246,240,231,0.64)]">Word</p>
-                    <div className="masked-word mt-4 break-words text-3xl font-black tracking-[0.22em] text-[#fff6ea]">
+                  <div className="text-center">
+                    <p className="section-label">Classified Word</p>
+                    <div className="flex flex-wrap justify-center gap-2 mt-4 mb-4">
                       {gameState.maskedWord.split(' ').map((letter, index) => (
-                        <div key={`${letter}-${index}`} className="letter-box">
+                        <div key={`${letter}-${index}`} className="w-10 h-12 border-b-4 border-[#2c2825] flex items-center justify-center text-3xl font-bold uppercase">
                           {letter}
                         </div>
                       ))}
                     </div>
-                    <p className="mt-3 text-sm text-[#d7c8bb]">
-                      Attempts left:{' '}
-                      <span className="font-black text-[#fff6ea]">{gameState.attemptsLeft}</span> / 6
+                    <p className="font-bold uppercase text-sm opacity-80">
+                      Strikes Remaining: <span className="text-xl font-black">{gameState.attemptsLeft}</span> / 6
                     </p>
                   </div>
                 )}
 
-                <div className="arcade-card rounded border border-[#00ff88]/30 bg-gray-950 p-4">
-                  <p className="section-label neon-text-orange text-[rgba(246,240,231,0.64)]">Wrong guesses</p>
-                  <div className="mt-3 flex min-h-10 flex-wrap gap-2">
-                    {gameState.wrongGuesses?.length ? (
-                      gameState.wrongGuesses.map((letter) => (
-                        <span
-                          key={letter}
-                          className="pop inline-flex h-10 w-10 items-center justify-center rounded border border-red-500/60 bg-gray-950 font-black text-red-500"
-                        >
-                          {letter}
-                        </span>
-                      ))
-                    ) : (
-                      <span className="text-sm text-[#d7c8bb]">No misses yet.</span>
-                    )}
-                  </div>
-                </div>
-
                 {isGuesser && gameState.status === 'ongoing' && (
-                  <div className="arcade-card rounded border border-[#00ff88]/30 bg-gray-950 p-4">
-                    <p className="section-label neon-text-orange text-[rgba(246,240,231,0.64)]">Guess letters</p>
-                    <div className="mt-4 flex flex-wrap justify-center gap-2">
+                  <div className="border-t-2 border-[#2c2825] pt-6">
+                    <p className="section-label mb-4">Typewriter</p>
+                    <div className="flex flex-wrap justify-center gap-2">
                       {ALPHABET.map((letter) => {
-                        const correct =
-                          gameState.guesses?.includes(letter) &&
-                          !gameState.wrongGuesses?.includes(letter)
+                        const correct = gameState.guesses?.includes(letter) && !gameState.wrongGuesses?.includes(letter)
                         const wrong = gameState.wrongGuesses?.includes(letter)
-                        let tone = ''
-                        if (correct) tone = 'correct'
-                        if (wrong) tone = 'wrong'
+                        const isUsed = usedLetters.has(letter)
+
+                        let btnClass = "w-10 h-10 rounded-full border-2 border-[#2c2825] text-lg font-bold uppercase transition-all shadow-[2px_2px_0px_#2c2825]"
+            
+                        if (!isUsed) {
+                          btnClass += " bg-[#d4c5b0] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-none"
+                        } else if (correct) {
+                          btnClass += " bg-[#2c2825] text-[#d4c5b0] shadow-none translate-y-[2px] translate-x-[2px]"
+                        } else if (wrong) {
+                          btnClass += " bg-[#e3d5c1] text-[#2c2825] opacity-50 shadow-none translate-y-[2px] translate-x-[2px] relative overflow-hidden"
+                        }
 
                         return (
                           <button
                             key={letter}
                             onClick={() => handleGuess(letter)}
-                            disabled={usedLetters.has(letter)}
-                            style={{ touchAction: 'manipulation' }}
-                            className={`key-btn ${tone} w-10 text-sm ${
-                              usedLetters.has(letter) ? 'cursor-not-allowed' : ''
-                            }`}
+                            disabled={isUsed}
+                            className={btnClass}
                           >
                             {letter}
+                            {wrong && <div className="absolute inset-0 bg-[#8b0000] opacity-80 w-full h-[2px] top-1/2 -mt-[1px] -rotate-45 pointer-events-none"></div>}
                           </button>
                         )
                       })}
@@ -362,32 +324,21 @@ export default function MultiplayerLobby() {
                 )}
 
                 {gameState.status === 'won' && (
-                  <div className="arcade-card rounded border border-[#00ff88]/30 bg-gray-950 p-6 text-center">
-                    <p className="section-label neon-text-orange text-[#caecd8]">Round result</p>
-                    <p className="neon-text mt-2 text-3xl font-black text-white">Word solved.</p>
-                    {gameState.word && (
-                      <p className="app-input-mono mt-3 text-xl font-black text-[#fff6ea]">
-                        {gameState.word}
-                      </p>
-                    )}
-                    <button onClick={handleRematch} className="primary-btn arcade-btn mt-5 px-6">
-                      Start rematch
+                  <div className="text-center border-t-4 border-dashed border-[#2c2825] pt-8">
+                    <p className="text-3xl font-black uppercase tracking-widest text-[#10B981] mb-2">CASE SOLVED</p>
+                    {gameState.word && <p className="text-xl font-bold uppercase mb-6">{gameState.word}</p>}
+                    <button onClick={handleRematch} className="btn-primary py-4 px-8">
+                      OPEN NEW CASE
                     </button>
                   </div>
                 )}
 
                 {gameState.status === 'lost' && (
-                  <div className="arcade-card rounded border border-red-500/60 bg-gray-950 p-6 text-center">
-                    <p className="section-label neon-text-orange text-[#ffd4ca]">Round result</p>
-                    <p className="neon-text-orange mt-2 text-3xl font-black text-white">Game over.</p>
-                    {gameState.word && (
-                      <p className="mt-3 text-sm text-[#fff0e9]">
-                        Final word:{' '}
-                        <span className="app-input-mono font-black text-white">{gameState.word}</span>
-                      </p>
-                    )}
-                    <button onClick={handleRematch} className="primary-btn arcade-btn mt-5 px-6">
-                      Start rematch
+                  <div className="text-center border-t-4 border-dashed border-[#2c2825] pt-8">
+                    <p className="text-3xl font-black uppercase tracking-widest text-[#8b0000] mb-2">CASE FAILED</p>
+                    {gameState.word && <p className="text-lg font-bold uppercase mb-6 opacity-80">True Word: <span className="text-xl">{gameState.word}</span></p>}
+                    <button onClick={handleRematch} className="btn-primary py-4 px-8">
+                      RETRY CASE
                     </button>
                   </div>
                 )}

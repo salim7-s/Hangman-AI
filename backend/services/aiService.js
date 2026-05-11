@@ -50,52 +50,44 @@ function getRandomWord(difficulty) {
 }
 
 /**
- * AI heuristic guess — matches PPT Slide 6 workflow
- * @param {string}   pattern        - e.g. "A _ _ _ E"
- * @param {string[]} wrongLetters   - letters guessed wrong
- * @param {string[]} guessedLetters - all letters guessed so far
- * @returns {{ letter: string, candidateCount: number }}
+ * Basic AI (Rookie) - Uses raw letter frequency only.
  */
-function aiGuess(pattern, wrongLetters, guessedLetters) {
-  const FALLBACK = ['E','T','A','O','I','N','S','R','H','L','D','C','U','P','F','M','W','Y','B','G','V','K','Q','J','X','Z']
+function aiGuessEasy(candidates, guessedSet, FALLBACK) {
+  if (candidates.length === 0) return FALLBACK.find(l => !guessedSet.has(l)) || 'E'
 
-  // Step 1: Parse pattern into positional array — "A _ _ _ E" → ["A","_","_","_","E"]
-  const patternChars = pattern.split(' ')
-  const wordLen = patternChars.length
-
-  // Collect letters that are already revealed in the pattern
-  const revealedLetters = new Set(patternChars.filter(ch => ch !== '_'))
-
-  // Step 2: Filter dictionary — same length, match revealed positions,
-  //         no wrong letters, blank positions must not contain revealed letters
-  const candidates = allWords.filter(word => {
-    if (word.length !== wordLen) return false
-    for (let i = 0; i < wordLen; i++) {
-      if (patternChars[i] !== '_') {
-        if (word[i] !== patternChars[i]) return false
-      } else {
-        if (revealedLetters.has(word[i])) return false
+  const freq = {}
+  for (const word of candidates) {
+    const seen = new Set()
+    for (const char of word) {
+      if (!guessedSet.has(char) && !seen.has(char)) {
+        freq[char] = (freq[char] || 0) + 1
+        seen.add(char) // Count word presence, not raw count
       }
     }
-    for (const wrong of wrongLetters) {
-      if (word.includes(wrong)) return false
-    }
-    return true
-  })
-
-  const candidateCount = candidates.length
-
-  // Step 3: Build guessed set
-  const guessedSet = new Set(guessedLetters.map(l => l.toUpperCase()))
-
-  // No candidates — fallback to frequency order
-  if (candidateCount === 0) {
-    const letter = FALLBACK.find(l => !guessedSet.has(l)) || 'E'
-    return { letter, candidateCount: 0 }
   }
 
-  // Step 4: Count letter frequency across candidates
-  const freq           = {}
+  let bestLetter = null
+  let maxFreq = -1
+  for (const [letter, count] of Object.entries(freq)) {
+    // Add a tiny bit of randomness to make the rookie occasionally pick suboptimal
+    const score = count * (0.8 + Math.random() * 0.4) 
+    if (score > maxFreq) {
+      maxFreq = score
+      bestLetter = letter
+    }
+  }
+
+  return bestLetter || FALLBACK.find(l => !guessedSet.has(l)) || 'E'
+}
+
+/**
+ * Medium AI (Detective) - Uses the heuristic scoring formula.
+ */
+function aiGuessMedium(candidates, patternChars, wordLen, guessedSet, FALLBACK) {
+  const candidateCount = candidates.length
+  if (candidateCount === 0) return FALLBACK.find(l => !guessedSet.has(l)) || 'E'
+
+  const freq = {}
   const positionalFreq = Array.from({ length: wordLen }, () => ({}))
 
   for (const word of candidates) {
@@ -113,28 +105,26 @@ function aiGuess(pattern, wrongLetters, guessedLetters) {
     }
   }
 
-  // Step 5: Score = 0.5 * frequency + 0.3 * positionalProbability + 0.2 * eliminationPower
-  const totalCandidates = candidateCount
   let bestLetter = null
   let bestScore  = -1
 
   for (const [letter, f] of Object.entries(freq)) {
     if (guessedSet.has(letter)) continue
 
-    const frequency = f / totalCandidates
+    const frequency = f / candidateCount
 
     let positionalSum = 0
     let blankCount    = 0
     for (let i = 0; i < wordLen; i++) {
       if (patternChars[i] === '_') {
-        positionalSum += (positionalFreq[i][letter] || 0) / totalCandidates
+        positionalSum += (positionalFreq[i][letter] || 0) / candidateCount
         blankCount++
       }
     }
     const positionalProbability = blankCount > 0 ? positionalSum / blankCount : 0
 
     const withoutLetter  = candidates.filter(w => !w.includes(letter)).length
-    const eliminationPower = withoutLetter / totalCandidates
+    const eliminationPower = withoutLetter / candidateCount
 
     const score = 0.5 * frequency + 0.3 * positionalProbability + 0.2 * eliminationPower
 
@@ -144,12 +134,108 @@ function aiGuess(pattern, wrongLetters, guessedLetters) {
     }
   }
 
-  if (!bestLetter) {
-    const letter = FALLBACK.find(l => !guessedSet.has(l)) || 'E'
-    return { letter, candidateCount }
+  return bestLetter || FALLBACK.find(l => !guessedSet.has(l)) || 'E'
+}
+
+/**
+ * Hard AI (Chief) - Uses mathematically perfect Shannon Entropy.
+ */
+function aiGuessHard(candidates, wordLen, guessedSet, FALLBACK) {
+  const candidateCount = candidates.length
+  if (candidateCount === 0) return FALLBACK.find(l => !guessedSet.has(l)) || 'E'
+
+  // If only one word left, just guess its missing letters
+  if (candidateCount === 1) {
+    for (const char of candidates[0]) {
+      if (!guessedSet.has(char)) return char
+    }
   }
 
-  return { letter: bestLetter, candidateCount }
+  const possibleLetters = new Set()
+  for (const word of candidates) {
+    for (const char of word) {
+      if (!guessedSet.has(char)) possibleLetters.add(char)
+    }
+  }
+
+  if (possibleLetters.size === 0) return FALLBACK.find(l => !guessedSet.has(l)) || 'E'
+
+  let bestLetter = null
+  let maxEntropy = -1
+
+  for (const letter of possibleLetters) {
+    const buckets = {}
+    
+    // Partition the candidates into buckets based on exact position matches
+    for (const word of candidates) {
+      let patternMatch = ''
+      for (let i = 0; i < wordLen; i++) {
+        patternMatch += (word[i] === letter ? '1' : '0')
+      }
+      buckets[patternMatch] = (buckets[patternMatch] || 0) + 1
+    }
+
+    // Calculate Shannon Entropy: H = -sum(p * log2(p))
+    let entropy = 0
+    for (const count of Object.values(buckets)) {
+      const p = count / candidateCount
+      entropy -= p * Math.log2(p)
+    }
+
+    if (entropy > maxEntropy) {
+      maxEntropy = entropy
+      bestLetter = letter
+    }
+  }
+
+  return bestLetter
+}
+
+/**
+ * AI guess entry point
+ * @param {string}   pattern        - e.g. "A _ _ _ E"
+ * @param {string[]} wrongLetters   - letters guessed wrong
+ * @param {string[]} guessedLetters - all letters guessed so far
+ * @param {string}   difficulty     - 'easy', 'medium', 'hard'
+ * @returns {{ letter: string, candidateCount: number }}
+ */
+function aiGuess(pattern, wrongLetters, guessedLetters, difficulty = 'medium') {
+  const FALLBACK = ['E','T','A','O','I','N','S','R','H','L','D','C','U','P','F','M','W','Y','B','G','V','K','Q','J','X','Z']
+
+  const patternChars = pattern.split(' ')
+  const wordLen = patternChars.length
+  const revealedLetters = new Set(patternChars.filter(ch => ch !== '_'))
+
+  // Step 1: Filter dictionary identically for all difficulties
+  const candidates = allWords.filter(word => {
+    if (word.length !== wordLen) return false
+    for (let i = 0; i < wordLen; i++) {
+      if (patternChars[i] !== '_') {
+        if (word[i] !== patternChars[i]) return false
+      } else {
+        if (revealedLetters.has(word[i])) return false
+      }
+    }
+    for (const wrong of wrongLetters) {
+      if (word.includes(wrong)) return false
+    }
+    return true
+  })
+
+  const candidateCount = candidates.length
+  const guessedSet = new Set(guessedLetters.map(l => l.toUpperCase()))
+
+  let letter = 'E'
+  
+  if (difficulty === 'easy') {
+    letter = aiGuessEasy(candidates, guessedSet, FALLBACK)
+  } else if (difficulty === 'hard') {
+    letter = aiGuessHard(candidates, wordLen, guessedSet, FALLBACK)
+  } else {
+    letter = aiGuessMedium(candidates, patternChars, wordLen, guessedSet, FALLBACK)
+  }
+
+  return { letter, candidateCount }
 }
 
 module.exports = { loadDictionary, getRandomWord, aiGuess }

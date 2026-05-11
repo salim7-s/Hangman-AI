@@ -63,65 +63,53 @@ async function startGame(req, res) {
 async function makeGuess(req, res) {
   try {
     const { gameId, letter } = req.body
-    if (!gameId || !letter)
-      return res.status(400).json({ error: 'gameId and letter are required' })
+    if (!gameId) return res.status(400).json({ error: 'gameId is required' })
 
     const Game = getGameModel()
-    let game
-
-    if (Game) {
-      game = await Game.findById(gameId)
-    } else {
-      game = memGames[gameId]
-    }
+    let game = Game ? await Game.findById(gameId) : memGames[gameId]
 
     if (!game) return res.status(404).json({ error: 'Game not found' })
     if (game.status !== 'ongoing') return res.status(400).json({ error: 'Game is already over' })
 
-    const L = letter.toUpperCase()
-    if (game.guesses.includes(L)) return res.status(400).json({ error: 'Letter already guessed' })
-
-    game.guesses.push(L)
     let aiGuessResult = null
 
-    if (game.word.includes(L)) {
-      game.maskedWord = buildMaskedWord(game.word, game.guesses)
-    } else {
-      game.wrongGuesses.push(L)
-    }
+    // For player guessing modes
+    if (game.mode !== 'player-vs-ai') {
+      if (!letter) return res.status(400).json({ error: 'letter is required' })
+      const L = letter.toUpperCase()
+      if (game.guesses.includes(L)) return res.status(400).json({ error: 'Letter already guessed' })
 
-    // ai-vs-player: player is guessing, winning = player, losing = ai
-    if (game.mode === 'ai-vs-player') {
-      if (!game.maskedWord.includes('_')) {
-        game.status = 'won'; game.winner = 'player'
-      } else if (game.wrongGuesses.length >= game.maxAttempts) {
-        game.status = 'lost'; game.winner = 'ai'
-      }
-    }
-
-    // player-vs-player: player guessing a human-set word
-    if (game.mode === 'player-vs-player') {
-      if (!game.maskedWord.includes('_')) {
-        game.status = 'won'; game.winner = 'player'
-      } else if (game.wrongGuesses.length >= game.maxAttempts) {
-        game.status = 'lost'; game.winner = 'ai'
-      }
-    }
-
-    // player-vs-ai: human set the word, AI is guessing
-    if (game.mode === 'player-vs-ai' && game.status === 'ongoing') {
-      const { letter: aiLetter, candidateCount } = aiGuess(game.maskedWord, game.wrongGuesses, game.guesses)
-      aiGuessResult = { letter: aiLetter, candidateCount }
-      game.guesses.push(aiLetter)
-
-      if (game.word.includes(aiLetter)) {
+      game.guesses.push(L)
+      if (game.word.includes(L)) {
         game.maskedWord = buildMaskedWord(game.word, game.guesses)
-        // AI solved the word → AI wins
-        if (!game.maskedWord.includes('_')) { game.status = 'won'; game.winner = 'ai' }
       } else {
-        game.wrongGuesses.push(aiLetter)
-        // AI ran out of attempts → player wins
-        if (game.wrongGuesses.length >= game.maxAttempts) { game.status = 'lost'; game.winner = 'player' }
+        game.wrongGuesses.push(L)
+      }
+
+      if (game.mode === 'ai-vs-player' || game.mode === 'player-vs-player') {
+        if (!game.maskedWord.includes('_')) {
+          game.status = 'won'; game.winner = 'player'
+        } else if (game.wrongGuesses.length >= game.maxAttempts) {
+          game.status = 'lost'; game.winner = 'ai'
+        }
+      }
+    }
+
+    // player-vs-ai: human set the word, AI is guessing automatically
+    if (game.mode === 'player-vs-ai' && game.status === 'ongoing') {
+      // Small safeguard: if AI already won/lost, do nothing. But status is ongoing.
+      const { letter: aiLetter, candidateCount } = aiGuess(game.maskedWord, game.wrongGuesses, game.guesses, game.difficulty)
+      aiGuessResult = { letter: aiLetter, candidateCount }
+      
+      if (!game.guesses.includes(aiLetter)) {
+        game.guesses.push(aiLetter)
+        if (game.word.includes(aiLetter)) {
+          game.maskedWord = buildMaskedWord(game.word, game.guesses)
+          if (!game.maskedWord.includes('_')) { game.status = 'won'; game.winner = 'ai' }
+        } else {
+          game.wrongGuesses.push(aiLetter)
+          if (game.wrongGuesses.length >= game.maxAttempts) { game.status = 'lost'; game.winner = 'player' }
+        }
       }
     }
 

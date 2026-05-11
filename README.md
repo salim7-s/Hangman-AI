@@ -136,8 +136,7 @@ hangman-ai/
 │   │   ├── components/  # HangmanScene, Keyboard, ResultModal
 │   │   ├── hooks/       # useStreak, useSounds, useSocket
 │   │   ├── pages/       # Home, Game, MultiplayerLobby
-│   │   ├── services/    # axios API client, runtimeConfig
-│   │   └── skins/       # 3D character skin definitions
+│   │   └── services/    # axios API client, runtimeConfig
 │   ├── vercel.json    # SPA fallback rewrites
 │   └── .env           # Local dev env (VITE_API_URL)
 └── words_250000_train.txt  # AI dictionary (2.35MB)
@@ -147,15 +146,13 @@ hangman-ai/
 
 ## 🤖 AI Algorithm
 
-The AI guesser (`backend/services/aiService.js`) implements a **frequency-analysis heuristic**:
+The AI guesser (`backend/services/aiService.js`) implements a **Multi-Tiered Intelligence Engine**:
 
-1. **Filter** the 250k-word dictionary to match the current pattern (length, revealed positions, no wrong letters)
-2. **Score** each unguessed letter:
-   ```
-   score = 0.5 × frequency + 0.3 × positionalProbability + 0.2 × eliminationPower
-   ```
-3. **Guess** the highest-scoring letter
-4. Falls back to English letter frequency order (`E,T,A,O…`) when no candidates remain
+1. **Rookie (Easy):** Uses raw letter frequency to guess like a human beginner.
+2. **Detective (Medium):** Uses a heuristic balancing frequency, positional probability, and elimination power.
+3. **Chief (Hard):** Uses a mathematically perfect **Shannon Entropy** algorithm. It calculates the exact expected information gain (in bits) for every available letter, guaranteeing the absolute fastest path to isolating the target word within the 250,000-word dictionary.
+
+All brains gracefully fall back to standard English letter frequency order (`E,T,A,O…`) when no dictionary candidates remain.
 
 ---
 

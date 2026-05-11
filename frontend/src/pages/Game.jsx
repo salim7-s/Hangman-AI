@@ -8,9 +8,9 @@ import { useStreak } from '../hooks/useStreak'
 import { useSounds } from '../hooks/useSounds'
 
 const MODE_LABELS = {
-  'ai-vs-player':     'Guess against AI',
-  'player-vs-ai':     'Watch AI guess',
-  'player-vs-player': 'Local duel',
+  'ai-vs-player':     'SOLO INVESTIGATION',
+  'player-vs-ai':     'AI INTERROGATION',
+  'player-vs-player': 'LOCAL DUEL',
 }
 
 export default function Game() {
@@ -37,12 +37,10 @@ export default function Game() {
   const [muted, setMuted] = useState(false)
   const sounds = useSounds()
 
-  // Redirect home if no game was started
   useEffect(() => {
     if (!gameId) navigate('/')
   }, [gameId, navigate])
 
-  // Escape key → back to home
   useEffect(() => {
     const handler = (e) => {
       if (e.key === 'Escape' && status === 'ongoing') navigate('/')
@@ -50,6 +48,17 @@ export default function Game() {
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
   }, [status, navigate])
+
+  // Automatically trigger AI guesses in Reverse mode
+  useEffect(() => {
+    if (mode === 'player-vs-ai' && status === 'ongoing' && !loading && !aiThinking) {
+      // Delay slightly so the UI doesn't feel instantly jarring
+      const timer = setTimeout(() => {
+        handleGuess('')
+      }, 1500)
+      return () => clearTimeout(timer)
+    }
+  }, [mode, status, loading, aiThinking])
 
   async function handleGuess(letter) {
     if (loading || aiThinking || status !== 'ongoing') return
@@ -67,7 +76,6 @@ export default function Game() {
       setStatus(data.status)
       if (data.word) setWord(data.word)
 
-      // Show AI thinking state briefly in player-vs-ai mode
       if (data.aiGuess) {
         setAiThinking(true)
         setTimeout(() => {
@@ -90,7 +98,7 @@ export default function Game() {
       if (data.status === 'won')  setStreakSnapshot(recordWin())
       if (data.status === 'lost') setStreakSnapshot(recordLoss())
     } catch (err) {
-      setError(err.response?.data?.error || 'Something went wrong.')
+      setError(err.response?.data?.error || 'COMMUNICATION ERROR.')
     } finally {
       setLoading(false)
     }
@@ -102,159 +110,114 @@ export default function Game() {
 
   function renderMaskedLetters(value) {
     return (value || '_ _ _ _').split(' ').map((letter, index) => (
-      <div key={`${letter}-${index}`} className="letter-box">
+      <div key={`${letter}-${index}`} className="w-12 h-14 border-b-[4px] border-[#2c2825] flex items-center justify-center text-4xl font-bold uppercase">
         {letter}
       </div>
     ))
   }
 
   const wrongGuessCount = 6 - attemptsLeft
-  const progressWidth   = `${(attemptsLeft / 6) * 100}%`
-  const attemptsTone    =
-    attemptsLeft <= 2 ? 'status-danger' : attemptsLeft <= 4 ? 'status-warning' : 'status-success'
-
-  // In player-vs-ai mode, the keyboard is disabled during both loading AND ai thinking
   const keyboardDisabled = loading || aiThinking || status !== 'ongoing'
 
   return (
-    <div className="app-shell">
-      <div className="page-wrap mx-auto max-w-7xl px-4 py-5 sm:px-6 sm:py-8 lg:px-8">
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <button onClick={() => navigate('/')} className="ghost-btn arcade-btn px-0 py-2 text-sm font-bold">
-            ← Back to menu
+    <div className="app-shell p-4 sm:p-8">
+      <div className="page-wrap mx-auto max-w-6xl">
+        <div className="mb-8 flex flex-wrap items-center justify-between gap-3 border-b-4 border-dashed border-[#2c2825] pb-4">
+          <button onClick={() => navigate('/')} className="text-[#2c2825] hover:opacity-70 font-bold uppercase tracking-widest text-sm transition-opacity">
+            &larr; ARCHIVES
           </button>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="pill-badge">{MODE_LABELS[mode] || 'Game'}</span>
-            <span className="pill-badge">Attempts {attemptsLeft}/6</span>
+          <div className="flex flex-wrap items-center gap-4">
+            <span className="font-bold border-2 border-[#2c2825] px-2 py-1 uppercase">{MODE_LABELS[mode] || 'CASE FILE'}</span>
+            <span className="font-bold border-2 border-[#2c2825] px-2 py-1 uppercase bg-[#2c2825] text-[#e3d5c1]">STRIKES LEFT: {attemptsLeft}/6</span>
             <button
               onClick={() => setMuted((v) => !v)}
-              className="secondary-btn arcade-btn arcade-btn-orange px-4 text-sm"
-              title={muted ? 'Unmute' : 'Mute'}
+              className="text-[#2c2825] font-bold underline"
             >
-              {muted ? '🔇 Muted' : '🔊 Sound on'}
+              {muted ? 'RADIO MUTED' : 'RADIO ON'}
             </button>
           </div>
         </div>
 
-        <div className="game-layout fade-in-up">
-          {/* ── Left: hangman scene + status ─────────────────────────── */}
-          <section className="glass-panel grain-panel arcade-card p-4 sm:p-5 lg:p-6">
-            <div className="mb-4 flex items-center justify-between gap-4">
-              <div>
-                <p className="section-label neon-text-orange">Figure board</p>
-                <h1 className="neon-text mt-2 text-2xl font-black sm:text-3xl">Read the pressure fast.</h1>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 fade-in-up">
+          
+          {/* ── Left: Sketch Pad & Status (5 cols) ─────────────────────────── */}
+          <section className="lg:col-span-5 flex flex-col gap-8">
+            <div className="glass-panel p-6 rotate-[-1deg]">
+              <div className="flex items-center justify-between mb-4 border-b-2 border-[#2c2825] pb-2">
+                <p className="font-bold tracking-widest uppercase">Suspect Sketch</p>
+                <p className="font-bold tracking-widest uppercase text-sm opacity-60">Status: {status === 'ongoing' ? 'AT LARGE' : status === 'won' ? 'CAPTURED' : 'ESCAPED'}</p>
               </div>
-              <div className="arcade-card rounded bg-gray-900 px-4 py-3 text-right">
-                <p className="text-xs font-bold uppercase tracking-[0.22em] text-muted">Round state</p>
-                <p className={`mt-1 text-lg font-black ${status === 'ongoing' ? attemptsTone : ''}`}>
-                  {status === 'ongoing' ? 'In play' : status === 'won' ? 'Solved' : 'Failed'}
-                </p>
+
+              <div className="border-4 border-[#2c2825] p-2 bg-[#d4c5b0]">
+                <HangmanScene wrongGuessCount={wrongGuessCount} skinName="default" isDead={status === 'lost'} />
               </div>
-            </div>
 
-            <HangmanScene wrongGuessCount={wrongGuessCount} skinName="default" isDead={status === 'lost'} />
-
-            <div className="mt-4">
-              <div className="stat-card stat-box">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="section-label stat-label">Attempts left</p>
-                    <p className={`stat-value mt-2 font-black ${attemptsTone}`}>{attemptsLeft}</p>
-                  </div>
-                  <div className="h-3 w-28 overflow-hidden rounded-full bg-[rgba(24,33,38,0.08)]">
-                    <div
-                      className={`h-full rounded-full transition-all duration-500 ${
-                        attemptsLeft <= 2 ? 'bg-[#bb4d3f]' : attemptsLeft <= 4 ? 'bg-[#c48b2d]' : 'bg-[#2d8a5f]'
-                      }`}
-                      style={{ width: progressWidth }}
-                    />
-                  </div>
+              <div className="mt-6">
+                <p className="font-bold uppercase tracking-widest text-sm mb-2">Errors in Judgement</p>
+                <div className="flex flex-wrap gap-2 min-h-[40px]">
+                  {wrongGuesses.length === 0 ? (
+                    <span className="opacity-50 text-sm font-bold italic">No errors yet.</span>
+                  ) : (
+                    wrongGuesses.map((letter) => (
+                      <span
+                        key={letter}
+                        className="text-[#8b0000] font-black text-2xl line-through decoration-4 uppercase"
+                      >
+                        {letter}
+                      </span>
+                    ))
+                  )}
                 </div>
-              </div>
-            </div>
-
-            <div className="arcade-card mt-4 stat-card">
-              <p className="section-label neon-text-orange">Wrong guesses</p>
-              <div className="mt-3 flex min-h-10 flex-wrap gap-2">
-                {wrongGuesses.length === 0 ? (
-                  <span className="text-sm text-muted">No misses yet.</span>
-                ) : (
-                  wrongGuesses.map((letter) => (
-                    <span
-                      key={letter}
-                      className="pop inline-flex h-10 w-10 items-center justify-center rounded border border-red-500/60 bg-gray-950 font-black text-red-500"
-                    >
-                      {letter}
-                    </span>
-                  ))
-                )}
-              </div>
-            </div>
-          </section>
-
-          {/* ── Right: word + keyboard ───────────────────────────────── */}
-          <section className="panel-dark arcade-card p-5 sm:p-6 lg:p-7">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <p className="section-label neon-text-orange text-[rgba(246,240,231,0.64)]">Word panel</p>
-                <h2 className="neon-text mt-2 text-3xl font-black text-[#fff6ea]">Keep every clue in view.</h2>
-              </div>
-              <div className="arcade-card rounded border border-[#00ff88]/30 bg-gray-950 px-4 py-3">
-                <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#d7c8bb]">Guess count</p>
-                <p className="neon-text mt-1 text-2xl font-black text-[#fff6ea]">{guesses.length}</p>
-              </div>
-            </div>
-
-            <div className="arcade-card mt-5 rounded border border-[#00ff88]/30 bg-gray-950 p-5 text-center sm:p-6">
-              <p className="section-label neon-text-orange text-[rgba(246,240,231,0.64)]">Target word</p>
-              <div className="masked-word mt-4 break-words text-3xl font-black tracking-[0.22em] text-[#fff6ea] sm:text-5xl">
-                {renderMaskedLetters(maskedWord)}
               </div>
             </div>
 
             {/* AI stats (player-vs-ai mode) */}
             {mode === 'player-vs-ai' && (
-              <div className="mt-4 grid gap-4 sm:grid-cols-2 fade-in-up">
-                <div className="arcade-card rounded border border-[#00ff88]/30 bg-gray-950 p-4">
-                  <p className="section-label neon-text-orange text-[rgba(246,240,231,0.64)]">Last AI guess</p>
-                  <p className="neon-text-orange mt-3 text-3xl font-black text-[#f7d7c0]">
-                    {aiThinking ? (
-                      <span className="animate-pulse">…</span>
-                    ) : (
-                      aiGuess || '--'
-                    )}
-                  </p>
-                </div>
-                <div className="arcade-card rounded border border-[#00ff88]/30 bg-gray-950 p-4">
-                  <p className="section-label neon-text-orange text-[rgba(246,240,231,0.64)]">Candidate words</p>
-                  <p className="neon-text mt-3 text-3xl font-black text-[#fff6ea]">
-                    {candidateCount ?? '--'}
-                  </p>
+              <div className="glass-panel p-6 rotate-[1deg]">
+                <p className="font-bold uppercase tracking-widest border-b-2 border-[#2c2825] pb-2 mb-4">Interrogation Log</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm font-bold opacity-70">AI SUSPECTS:</p>
+                    <p className="text-2xl font-black">{aiThinking ? '...' : aiGuess || '--'}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold opacity-70">POSSIBILITIES:</p>
+                    <p className="text-2xl font-black">{candidateCount ?? '--'}</p>
+                  </div>
                 </div>
               </div>
             )}
+          </section>
 
-            {error && <p className="mt-4 shake text-sm font-semibold text-[#ffcfbe]">{error}</p>}
-
-            <div className="arcade-card mt-5 rounded border border-[#00ff88]/30 bg-gray-950 p-4 sm:p-5">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="section-label neon-text-orange text-[rgba(246,240,231,0.64)]">Keyboard</p>
-                  <p className="mt-1 text-sm text-[#d7c8bb]">Tap or type letters. Press Esc to exit.</p>
+          {/* ── Right: Evidence & Keyboard (7 cols) ───────────────────────────────── */}
+          <section className="lg:col-span-7 flex flex-col gap-8">
+            <div className="glass-panel p-8 sm:p-12 h-full flex flex-col">
+              
+              <div className="mb-12">
+                <p className="section-label">Evidence Board</p>
+                <div className="flex flex-wrap justify-center gap-3 mt-4">
+                  {renderMaskedLetters(maskedWord)}
                 </div>
-                {(loading || aiThinking) && (
-                  <p className="text-sm font-bold text-[#f7d7c0] animate-pulse">
-                    {aiThinking ? 'AI thinking…' : 'Processing…'}
-                  </p>
-                )}
               </div>
 
-              <Keyboard
-                guesses={guesses}
-                wrongGuesses={wrongGuesses}
-                onGuess={handleGuess}
-                disabled={keyboardDisabled}
-              />
+              <div className="mt-auto">
+                <div className="flex justify-between items-end mb-4">
+                  <p className="section-label mb-0">Typewriter</p>
+                  {(loading || aiThinking) && (
+                    <p className="text-sm font-bold animate-pulse text-[#8b0000]">PROCESSING...</p>
+                  )}
+                </div>
+                
+                {error && <p className="mb-4 shake font-bold text-[#8b0000] border-2 border-[#8b0000] p-2 text-center">{error}</p>}
+
+                <Keyboard
+                  guesses={guesses}
+                  wrongGuesses={wrongGuesses}
+                  onGuess={handleGuess}
+                  disabled={keyboardDisabled}
+                />
+              </div>
+
             </div>
           </section>
         </div>

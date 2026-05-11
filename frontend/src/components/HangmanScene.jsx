@@ -1,15 +1,15 @@
 import { Suspense } from 'react'
 import { Canvas } from '@react-three/fiber'
-import { OrbitControls } from '@react-three/drei'
+import { OrbitControls, ContactShadows } from '@react-three/drei'
 import CharacterModel from './CharacterModel'
 
 function CanvasFallback() {
   return (
     <div
       style={{ height: 'clamp(260px, 45vw, 470px)' }}
-      className="flex items-center justify-center rounded-[28px] border border-[var(--line)] bg-[#030712]"
+      className="flex items-center justify-center border-4 border-[#2c2825] bg-[#d4c5b0]"
     >
-      <p className="text-sm text-muted animate-pulse">Loading 3D scene…</p>
+      <p className="font-bold tracking-widest uppercase animate-pulse">DRAWING SKETCH...</p>
     </div>
   )
 }
@@ -21,32 +21,41 @@ export default function HangmanScene({
 }) {
   return (
     <div
-      className="overflow-hidden rounded-[28px] border border-[var(--line)] shadow-[0_18px_40px_rgba(75,54,33,0.12)]"
+      className="relative"
       style={{
         height: 'clamp(260px, 45vw, 470px)',
-        background: '#030712',
+        background: 'transparent',
       }}
     >
       <Suspense fallback={<CanvasFallback />}>
-        <Canvas camera={{ position: [0, 1.5, 5], fov: 50 }}>
-          <color attach="background" args={['#030712']} />
-          <ambientLight intensity={0.9} />
-          <directionalLight position={[5, 5, 5]} intensity={1} castShadow />
-          <pointLight position={[-3, 3, 3]} intensity={0.7} color="#d96c3d" />
-          <pointLight position={[3, 2, -1]} intensity={0.35} color="#f8e7cd" />
+        <Canvas camera={{ position: [0, 1.5, 6], fov: 45 }} gl={{ antialias: true }}>
+          
+          {/* Harsh, flat lighting for a 2D sketch look */}
+          <ambientLight intensity={1.5} />
+          <directionalLight position={[5, 5, 5]} intensity={1} />
+          
           <OrbitControls
             enablePan={false}
-            minDistance={3}
-            maxDistance={8}
+            enableZoom={false}
+            minPolarAngle={Math.PI / 3}
+            maxPolarAngle={Math.PI / 2 + 0.1}
             target={[0, 1.2, 0]}
-            minPolarAngle={0.2}
-            maxPolarAngle={Math.PI / 2}
+            autoRotate={!isDead}
+            autoRotateSpeed={0.5}
           />
+
+          {/* The Pencil Sketch Character */}
           <CharacterModel wrongGuessCount={wrongGuessCount} skinName={skinName} isDead={isDead} />
-          <mesh position={[0, -0.55, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-            <circleGeometry args={[1.25, 32]} />
-            <meshStandardMaterial color="#31424a" />
-          </mesh>
+          
+          {/* Ground & Hard Pencil Shadow */}
+          <ContactShadows 
+            position={[0, -0.6, 0]} 
+            opacity={0.6} 
+            scale={10} 
+            blur={0.5} 
+            far={4} 
+            color="#2c2825" 
+          />
         </Canvas>
       </Suspense>
     </div>
