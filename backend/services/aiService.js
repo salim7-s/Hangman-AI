@@ -70,7 +70,7 @@ function aiGuessEasy(candidates, guessedSet, FALLBACK) {
   let maxFreq = -1
   for (const [letter, count] of Object.entries(freq)) {
     // Add a tiny bit of randomness to make the rookie occasionally pick suboptimal
-    const score = count * (0.8 + Math.random() * 0.4) 
+    const score = count * (0.9 + Math.random() * 0.2) // narrow jitter: ±10% feels dumb but not broken
     if (score > maxFreq) {
       maxFreq = score
       bestLetter = letter
@@ -123,8 +123,10 @@ function aiGuessMedium(candidates, patternChars, wordLen, guessedSet, FALLBACK) 
     }
     const positionalProbability = blankCount > 0 ? positionalSum / blankCount : 0
 
-    const withoutLetter  = candidates.filter(w => !w.includes(letter)).length
-    const eliminationPower = withoutLetter / candidateCount
+    // eliminationPower: fraction of candidates that DO contain this letter
+    // (high = letter is common = good guess). Previously this was inverted.
+    const withLetter       = candidates.filter(w => w.includes(letter)).length
+    const eliminationPower = withLetter / candidateCount
 
     const score = 0.5 * frequency + 0.3 * positionalProbability + 0.2 * eliminationPower
 
@@ -188,7 +190,8 @@ function aiGuessHard(candidates, wordLen, guessedSet, FALLBACK) {
     }
   }
 
-  return bestLetter
+  // Fallback safety — should never be null after the loop, but guard anyway
+  return bestLetter || FALLBACK.find(l => !guessedSet.has(l)) || 'E'
 }
 
 /**
@@ -202,18 +205,23 @@ function aiGuessHard(candidates, wordLen, guessedSet, FALLBACK) {
 function aiGuess(pattern, wrongLetters, guessedLetters, difficulty = 'medium') {
   const FALLBACK = ['E','T','A','O','I','N','S','R','H','L','D','C','U','P','F','M','W','Y','B','G','V','K','Q','J','X','Z']
 
+  // Defensive: ensure arrays even if called with string/null
+  if (!Array.isArray(wrongLetters))   wrongLetters   = wrongLetters   ? [...wrongLetters]   : []
+  if (!Array.isArray(guessedLetters)) guessedLetters = guessedLetters ? [...guessedLetters] : []
+
   const patternChars = pattern.split(' ')
   const wordLen = patternChars.length
-  const revealedLetters = new Set(patternChars.filter(ch => ch !== '_'))
 
-  // Step 1: Filter dictionary identically for all difficulties
+  // Step 1: Filter dictionary identically for all difficulties.
+  // NOTE: We do NOT reject candidates based on revealed letters appearing in blank
+  // positions — that is valid for words with repeated letters (e.g. LEVEL, EERIE).
+  // The position-match check and wrong-letter exclusion are sufficient.
   const candidates = allWords.filter(word => {
     if (word.length !== wordLen) return false
     for (let i = 0; i < wordLen; i++) {
       if (patternChars[i] !== '_') {
+        // Known position must match exactly
         if (word[i] !== patternChars[i]) return false
-      } else {
-        if (revealedLetters.has(word[i])) return false
       }
     }
     for (const wrong of wrongLetters) {
