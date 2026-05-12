@@ -90,6 +90,12 @@ export default function Home() {
               >
                 OPEN CASE FILE
               </button>
+              <button
+                onClick={() => navigate('/multiplayer')}
+                className="btn-primary text-xl px-12 py-4 min-w-[240px]"
+              >
+                MULTIPLAYER LOBBY
+              </button>
             </div>
             
             <div className="absolute top-4 right-4 text-xs opacity-50 font-bold rotate-90 origin-top-right">
