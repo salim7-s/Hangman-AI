@@ -26,16 +26,16 @@ export default function Keyboard({ guesses, wrongGuesses, onGuess, disabled }) {
   }, [guesses, disabled, onGuess])
 
   return (
-    <div className="mt-4 flex flex-col items-center gap-3">
+    <div className="mt-4 flex flex-col items-center gap-2 sm:gap-3">
       {ROWS.map((row, rowIndex) => (
-        <div key={rowIndex} className="flex flex-wrap justify-center gap-2 sm:gap-3">
+        <div key={rowIndex} className="flex flex-wrap justify-center gap-1.5 sm:gap-3">
           {row.map((letter) => {
             const isCorrect = correctSet.has(letter)
             const isWrong = wrongSet.has(letter)
             const isUsed = usedSet.has(letter)
 
             // Typewriter key baseline styles
-            let btnClass = "w-10 h-10 sm:w-12 sm:h-12 rounded-full border-2 border-[#2c2825] text-lg sm:text-xl font-bold uppercase transition-all shadow-[2px_2px_0px_#2c2825]"
+            let btnClass = "h-9 w-9 rounded-full border-2 border-[#2c2825] text-base font-bold uppercase transition-all shadow-[2px_2px_0px_#2c2825] sm:h-12 sm:w-12 sm:text-xl"
             
             if (!isUsed && !disabled) {
               btnClass += " bg-[#d4c5b0] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-none"

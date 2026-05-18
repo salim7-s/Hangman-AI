@@ -21,6 +21,10 @@ html, body, #root {
   min-height: 100%;
 }
 
+html {
+  overflow-x: hidden;
+}
+
 body {
   margin: 0;
   background-color: var(--bg);
@@ -29,6 +33,7 @@ body {
   font-family: 'Courier Prime', Courier, monospace;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
 }
 
 /* Base Panel */
@@ -174,11 +179,13 @@ body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  width: 100%;
 }
 
 .page-wrap {
   flex: 1;
   width: 100%;
+  min-width: 0;
 }
 
 /* Stamps */
@@ -193,4 +200,25 @@ body {
   display: inline-block;
   opacity: 0.8;
   mix-blend-mode: multiply;
+}
+
+@media (max-width: 640px) {
+  .glass-panel {
+    box-shadow: 6px 6px 0px rgba(44, 40, 37, 0.22);
+  }
+
+  .btn-primary,
+  .btn-secondary {
+    letter-spacing: 1px;
+  }
+
+  .glass-input {
+    font-size: 1.125rem;
+  }
+
+  .stamp-confidential {
+    padding: 0.35rem 0.65rem;
+    font-size: 0.85rem;
+    border-width: 3px;
+  }
 }

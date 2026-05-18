@@ -180,7 +180,7 @@ export default function MultiplayerLobby() {
           : 'Monitor the live investigation. Use chat to coordinate with your partner.'
 
   return (
-    <div className="app-shell p-4 sm:p-8">
+    <div className="app-shell p-3 sm:p-8">
       <div className="page-wrap mx-auto max-w-6xl">
         <div className="mb-8 flex flex-wrap items-center justify-between gap-3 border-b-4 border-dashed border-[#2c2825] pb-4">
           <button onClick={() => navigate('/')} className="text-[#2c2825] hover:opacity-70 font-bold uppercase tracking-widest text-sm transition-opacity">
@@ -242,9 +242,9 @@ export default function MultiplayerLobby() {
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 fade-in-up">
-          <section className="glass-panel p-8 rotate-[1deg]">
+          <section className="glass-panel p-5 sm:rotate-[1deg] sm:p-8">
             <p className="font-bold uppercase tracking-widest text-sm opacity-60 mb-2">Protocol 9</p>
-            <h1 className="text-4xl font-black uppercase tracking-widest mb-6">Partner <br />Inquiry Line</h1>
+            <h1 className="mb-6 text-3xl font-black uppercase tracking-[0.12em] sm:text-4xl sm:tracking-widest">Partner <br />Inquiry Line</h1>
             <p className="font-bold uppercase tracking-wider text-sm mb-8 opacity-80 border-l-4 border-[#2c2825] pl-4">
               Secure socket connection established. Coordinate with a remote agent. One agent logs the evidence; the other extracts the truth.
             </p>
@@ -286,7 +286,7 @@ export default function MultiplayerLobby() {
             )}
           </section>
 
-          <section className="glass-panel p-8 rotate-[-1deg] bg-[#e3d5c1] border-[#2c2825] flex flex-col gap-8">
+          <section className="glass-panel flex flex-col gap-8 border-[#2c2825] bg-[#e3d5c1] p-5 sm:rotate-[-1deg] sm:p-8">
             {(screen === 'home' || screen === 'join' || screen === 'create' || screen === 'word-entry' || screen === 'game') && (
               <div>
                 {screen === 'home' && (
@@ -335,7 +335,7 @@ export default function MultiplayerLobby() {
                         onChange={(event) => setInputCode(event.target.value.toUpperCase())}
                         placeholder="6-LETTER CODE"
                         maxLength={6}
-                        className="glass-input uppercase text-center font-black tracking-widest text-2xl"
+                        className="glass-input text-center text-xl font-black uppercase tracking-[0.2em] sm:text-2xl sm:tracking-widest"
                       />
                     </div>
                     <div className="flex flex-col sm:flex-row gap-4 pt-4">
@@ -352,7 +352,7 @@ export default function MultiplayerLobby() {
                 {screen === 'create' && (
                   <div className="text-center space-y-8">
                     <p className="section-label">Access Code Generated</p>
-                    <p className="text-6xl font-black tracking-[0.2em] border-y-4 border-[#2c2825] py-6 my-8">
+                    <p className="my-8 break-all border-y-4 border-[#2c2825] py-6 text-4xl font-black tracking-[0.18em] sm:text-6xl sm:tracking-[0.2em]">
                       {roomCode}
                     </p>
                     <p className="font-bold uppercase text-sm opacity-80">Awaiting partner connection...</p>
@@ -373,7 +373,7 @@ export default function MultiplayerLobby() {
                         onChange={(event) => setWordInput(event.target.value.replace(/[^a-zA-Z]/g, '').toUpperCase())}
                         placeholder="ENTER SECRET WORD"
                         maxLength={20}
-                        className="glass-input uppercase text-center font-black tracking-widest text-2xl"
+                        className="glass-input text-center text-xl font-black uppercase tracking-[0.2em] sm:text-2xl sm:tracking-widest"
                       />
                     </div>
                     <button onClick={handleSubmitWord} className="btn-primary w-full py-4 mt-4">
@@ -384,7 +384,7 @@ export default function MultiplayerLobby() {
 
                 {screen === 'game' && gameState && (
                   <div className="space-y-8">
-                    <div className="grid grid-cols-2 gap-4 border-b-2 border-[#2c2825] pb-6">
+                    <div className="grid grid-cols-1 gap-4 border-b-2 border-[#2c2825] pb-6 sm:grid-cols-2">
                       <div>
                         <p className="text-xs font-bold uppercase opacity-60">Informant</p>
                         <p className="font-black text-xl">{gameState.wordGiver}</p>
@@ -400,7 +400,7 @@ export default function MultiplayerLobby() {
                         <p className="section-label">Classified Word</p>
                         <div className="flex flex-wrap justify-center gap-2 mt-4 mb-4">
                           {gameState.maskedWord.split(' ').map((letter, index) => (
-                            <div key={`${letter}-${index}`} className="w-10 h-12 border-b-4 border-[#2c2825] flex items-center justify-center text-3xl font-bold uppercase">
+                            <div key={`${letter}-${index}`} className="flex h-10 w-8 items-center justify-center border-b-4 border-[#2c2825] text-2xl font-bold uppercase sm:h-12 sm:w-10 sm:text-3xl">
                               {letter}
                             </div>
                           ))}
@@ -414,13 +414,13 @@ export default function MultiplayerLobby() {
                     {isGuesser && gameState.status === 'ongoing' && (
                       <div className="border-t-2 border-[#2c2825] pt-6">
                         <p className="section-label mb-4">Typewriter</p>
-                        <div className="flex flex-wrap justify-center gap-2">
+                        <div className="flex flex-wrap justify-center gap-1.5 sm:gap-2">
                           {ALPHABET.map((letter) => {
                             const correct = gameState.guesses?.includes(letter) && !gameState.wrongGuesses?.includes(letter)
                             const wrong = gameState.wrongGuesses?.includes(letter)
                             const isUsed = usedLetters.has(letter)
 
-                            let btnClass = 'w-10 h-10 rounded-full border-2 border-[#2c2825] text-lg font-bold uppercase transition-all shadow-[2px_2px_0px_#2c2825]'
+                            let btnClass = 'h-9 w-9 rounded-full border-2 border-[#2c2825] text-base font-bold uppercase transition-all shadow-[2px_2px_0px_#2c2825] sm:h-10 sm:w-10 sm:text-lg'
 
                             if (!isUsed) {
                               btnClass += ' bg-[#d4c5b0] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-none'
@@ -498,7 +498,7 @@ export default function MultiplayerLobby() {
                   )}
                 </div>
 
-                <div className="flex gap-3">
+                <div className="flex flex-col gap-3 sm:flex-row">
                   <input
                     value={chatInput}
                     onChange={(event) => setChatInput(event.target.value)}
@@ -509,7 +509,7 @@ export default function MultiplayerLobby() {
                     maxLength={240}
                     className="glass-input flex-1 uppercase"
                   />
-                  <button onClick={handleSendChat} className="btn-primary px-5 py-3">
+                  <button onClick={handleSendChat} className="btn-primary px-5 py-3 sm:self-end">
                     SEND
                   </button>
                 </div>
