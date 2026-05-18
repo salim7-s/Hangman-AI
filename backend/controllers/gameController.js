@@ -5,6 +5,12 @@ const { getRandomWord, aiGuess } = require('../services/aiService')
 const memGames = {}
 let GameModel = null
 
+function resetInMemoryGames() {
+  for (const key of Object.keys(memGames)) {
+    delete memGames[key]
+  }
+}
+
 function isMongoConnected() {
   return mongoose.connection.readyState === 1
 }
@@ -184,4 +190,10 @@ async function getLeaderboard(req, res) {
   }
 }
 
-module.exports = { startGame, makeGuess, getGame, getLeaderboard }
+module.exports = {
+  startGame,
+  makeGuess,
+  getGame,
+  getLeaderboard,
+  __resetInMemoryGames: resetInMemoryGames,
+}

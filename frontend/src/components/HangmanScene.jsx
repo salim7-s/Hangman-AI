@@ -1,6 +1,6 @@
 import { Suspense } from 'react'
 import { Canvas } from '@react-three/fiber'
-import { OrbitControls, ContactShadows, AccumulativeShadows, RandomizedLight } from '@react-three/drei'
+import { OrbitControls, ContactShadows } from '@react-three/drei'
 import CharacterModel from './CharacterModel'
 
 function CanvasFallback() {

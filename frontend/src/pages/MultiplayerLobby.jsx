@@ -1,8 +1,15 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSocket } from '../hooks/useSocket'
+import api from '../services/api'
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
+
+function getScreenForState(role, status, fallback = 'game') {
+  if (status === 'waiting' && role === 'word-giver') return 'create'
+  if (status === 'word-entry' && role === 'word-giver') return 'word-entry'
+  return fallback
+}
 
 export default function MultiplayerLobby() {
   const navigate = useNavigate()
@@ -15,6 +22,11 @@ export default function MultiplayerLobby() {
   const [role, setRole] = useState(null)
   const [wordInput, setWordInput] = useState('')
   const [gameState, setGameState] = useState(null)
+  const [chatInput, setChatInput] = useState('')
+  const [chatMessages, setChatMessages] = useState([])
+  const [leaderboard, setLeaderboard] = useState([])
+  const [leaderboardOpen, setLeaderboardOpen] = useState(false)
+  const [leaderboardLoading, setLeaderboardLoading] = useState(false)
   const [error, setError] = useState('')
   const [info, setInfo] = useState('')
   const [loading, setLoading] = useState(false)
@@ -22,17 +34,26 @@ export default function MultiplayerLobby() {
 
   useEffect(() => {
     const cleanups = [
-      on('room-created', ({ code, role: nextRole }) => {
+      on('room-created', ({ code, role: nextRole, screen: nextScreen, room }) => {
         setRoomCode(code)
         setRole(nextRole)
-        setScreen('create')
+        setGameState(room)
+        setChatMessages(room?.chatMessages || [])
+        setScreen(nextScreen || 'create')
+        setInfo('Secure line established. Share the room code with your partner.')
         setLoading(false)
       }),
-      on('room-joined', ({ code, role: nextRole, wordGiverNickname }) => {
+      on('room-joined', ({ code, role: nextRole, screen: nextScreen, room, wordGiverNickname, reconnected }) => {
         setRoomCode(code)
         setRole(nextRole)
-        setInfo(`Joined room. Waiting for ${wordGiverNickname} to submit a word.`)
-        setScreen('game')
+        setGameState(room)
+        setChatMessages(room?.chatMessages || [])
+        setScreen(nextScreen || getScreenForState(nextRole, room?.status, 'game'))
+        setInfo(
+          reconnected
+            ? 'Connection restored. Room state synced from storage.'
+            : `Joined room. Waiting for ${wordGiverNickname} to submit a word.`
+        )
         setLoading(false)
       }),
       on('guesser-joined', ({ guesserNickname }) => {
@@ -45,16 +66,25 @@ export default function MultiplayerLobby() {
       }),
       on('game-state', (state) => {
         setGameState(state)
+        setChatMessages(state.chatMessages || [])
+        setScreen((current) => getScreenForState(role, state.status, current === 'home' || current === 'join' ? 'game' : current))
         setError('')
+      }),
+      on('chat-message', (message) => {
+        setChatMessages((current) => [...current, message].slice(-50))
+      }),
+      on('role-updated', ({ role: nextRole, screen: nextScreen }) => {
+        setRole(nextRole)
+        setScreen(nextScreen || 'game')
       }),
       on('rematch-started', ({ wordGiverNickname, guesserNickname }) => {
         setInfo(`New round. ${wordGiverNickname} sets the word, ${guesserNickname} guesses.`)
         setWordInput('')
-        setScreen('word-entry')
       }),
       on('player-left', ({ nickname: playerNickname }) => {
-        setError(`${playerNickname} left the game.`)
-        setScreen('home')
+        if (playerNickname) {
+          setInfo(`${playerNickname} disconnected. Room state has been saved.`)
+        }
       }),
       on('error', ({ message }) => {
         setError(message)
@@ -63,7 +93,7 @@ export default function MultiplayerLobby() {
     ]
 
     return () => cleanups.forEach((cleanup) => cleanup && cleanup())
-  }, [on])
+  }, [on, role])
 
   useEffect(() => {
     if (!copied) return undefined
@@ -75,7 +105,7 @@ export default function MultiplayerLobby() {
     if (!nickname.trim()) return setError('Enter your badge name.')
     setError('')
     setLoading(true)
-    emit('create-room', { nickname: nickname.trim() })
+    emit('create-room', { nickname: nickname.trim().toUpperCase() })
   }
 
   const handleJoin = () => {
@@ -83,7 +113,10 @@ export default function MultiplayerLobby() {
     if (!inputCode.trim()) return setError('Enter an access code.')
     setError('')
     setLoading(true)
-    emit('join-room', { code: inputCode.trim().toUpperCase(), nickname: nickname.trim() })
+    emit('join-room', {
+      code: inputCode.trim().toUpperCase(),
+      nickname: nickname.trim().toUpperCase(),
+    })
   }
 
   const handleSubmitWord = () => {
@@ -103,12 +136,35 @@ export default function MultiplayerLobby() {
 
   const handleRematch = () => emit('rematch', { code: roomCode })
 
+  const handleSendChat = () => {
+    if (!chatInput.trim()) return
+    emit('send-chat-message', { code: roomCode, message: chatInput.trim() })
+    setChatInput('')
+  }
+
   const handleCopyRoomCode = async () => {
     try {
       await navigator.clipboard.writeText(roomCode)
       setCopied(true)
     } catch {
       setCopied(false)
+    }
+  }
+
+  const handleToggleLeaderboard = async () => {
+    const nextOpen = !leaderboardOpen
+    setLeaderboardOpen(nextOpen)
+
+    if (!nextOpen || leaderboard.length > 0) return
+
+    try {
+      setLeaderboardLoading(true)
+      const response = await api.get('/api/game/leaderboard')
+      setLeaderboard(response.data)
+    } catch (requestError) {
+      setError(requestError.response?.data?.error || 'Could not load leaderboard.')
+    } finally {
+      setLeaderboardLoading(false)
     }
   }
 
@@ -121,25 +177,74 @@ export default function MultiplayerLobby() {
         ? 'Distribute this access code to your partner.'
         : screen === 'word-entry'
           ? 'Log the classified word to begin the interrogation.'
-          : 'Monitor the live investigation. Request a new file when concluded.'
+          : 'Monitor the live investigation. Use chat to coordinate with your partner.'
 
   return (
     <div className="app-shell p-4 sm:p-8">
-      <div className="page-wrap mx-auto max-w-5xl">
+      <div className="page-wrap mx-auto max-w-6xl">
         <div className="mb-8 flex flex-wrap items-center justify-between gap-3 border-b-4 border-dashed border-[#2c2825] pb-4">
           <button onClick={() => navigate('/')} className="text-[#2c2825] hover:opacity-70 font-bold uppercase tracking-widest text-sm transition-opacity">
             &larr; ARCHIVES
           </button>
-          <span className="font-bold border-2 border-[#2c2825] px-2 py-1 uppercase bg-[#2c2825] text-[#e3d5c1]">
-            MULTI-AGENT SECURE LINE
-          </span>
+          <div className="flex flex-wrap items-center gap-3">
+            <button onClick={handleToggleLeaderboard} className="btn-secondary px-4 py-2 text-sm">
+              {leaderboardOpen ? 'HIDE LEADERBOARD' : 'VIEW LEADERBOARD'}
+            </button>
+            <span className="font-bold border-2 border-[#2c2825] px-2 py-1 uppercase bg-[#2c2825] text-[#e3d5c1]">
+              MULTI-AGENT SECURE LINE
+            </span>
+          </div>
         </div>
 
+        {leaderboardOpen && (
+          <section className="glass-panel mb-8 p-6 rotate-[0.4deg]">
+            <div className="mb-4 flex items-center justify-between border-b-2 border-[#2c2825] pb-3">
+              <div>
+                <p className="section-label mb-1">Leaderboard</p>
+                <p className="font-bold uppercase text-sm opacity-70">Top agents by recorded wins</p>
+              </div>
+              <button onClick={() => setLeaderboardOpen(false)} className="text-sm font-bold uppercase underline">
+                Close
+              </button>
+            </div>
+
+            {leaderboardLoading ? (
+              <p className="font-bold uppercase text-sm">Loading standings...</p>
+            ) : leaderboard.length === 0 ? (
+              <p className="font-bold uppercase text-sm opacity-70">No ranked data yet.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm uppercase">
+                  <thead>
+                    <tr className="border-b-2 border-[#2c2825]">
+                      <th className="py-2">Rank</th>
+                      <th className="py-2">Agent</th>
+                      <th className="py-2">Wins</th>
+                      <th className="py-2">Games</th>
+                      <th className="py-2">Win %</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {leaderboard.map((entry) => (
+                      <tr key={`${entry.username}-${entry.rank}`} className="border-b border-[#2c2825]/20">
+                        <td className="py-2 font-black">{entry.rank}</td>
+                        <td className="py-2 font-bold">{entry.username}</td>
+                        <td className="py-2">{entry.wins}</td>
+                        <td className="py-2">{entry.gamesPlayed}</td>
+                        <td className="py-2">{entry.winPercent}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 fade-in-up">
-          {/* ── Left: Information Ledger ─────────────────────────── */}
           <section className="glass-panel p-8 rotate-[1deg]">
             <p className="font-bold uppercase tracking-widest text-sm opacity-60 mb-2">Protocol 9</p>
-            <h1 className="text-4xl font-black uppercase tracking-widest mb-6">Partner <br/>Inquiry Line</h1>
+            <h1 className="text-4xl font-black uppercase tracking-widest mb-6">Partner <br />Inquiry Line</h1>
             <p className="font-bold uppercase tracking-wider text-sm mb-8 opacity-80 border-l-4 border-[#2c2825] pl-4">
               Secure socket connection established. Coordinate with a remote agent. One agent logs the evidence; the other extracts the truth.
             </p>
@@ -153,195 +258,261 @@ export default function MultiplayerLobby() {
                 <p className="section-label mb-2">2. Establish Link</p>
                 <p className="font-bold uppercase text-sm">Create a secure line or use a known access code.</p>
               </div>
+              <div className="border-2 border-[#2c2825] p-4 bg-[#e3d5c1] shadow-[4px_4px_0px_#2c2825]">
+                <p className="section-label mb-2">3. Field Chat</p>
+                <p className="font-bold uppercase text-sm">Use the room chat to coordinate in real time while the case is active.</p>
+              </div>
             </div>
-            
+
             <div className="mt-8 border-t-2 border-dashed border-[#2c2825] pt-6">
               <p className="section-label">Current Status</p>
               <p className="font-bold uppercase text-lg mt-2">{stepText}</p>
               {info && <p className="font-bold text-[#2d8a5f] uppercase text-sm mt-2">{info}</p>}
               {error && <p className="font-bold text-[#8b0000] uppercase text-sm mt-2 border-2 border-[#8b0000] p-2 shake inline-block">{error}</p>}
             </div>
+
+            {gameState && (
+              <div className="mt-8 border-t-2 border-dashed border-[#2c2825] pt-6">
+                <p className="section-label mb-3">Connection Status</p>
+                <div className="flex flex-wrap gap-3 uppercase text-sm font-bold">
+                  <span className={`border-2 px-3 py-2 ${gameState.connections?.wordGiver ? 'border-[#2d8a5f] text-[#2d8a5f]' : 'border-[#8b0000] text-[#8b0000]'}`}>
+                    Informant: {gameState.connections?.wordGiver ? 'Online' : 'Offline'}
+                  </span>
+                  <span className={`border-2 px-3 py-2 ${gameState.connections?.guesser ? 'border-[#2d8a5f] text-[#2d8a5f]' : 'border-[#8b0000] text-[#8b0000]'}`}>
+                    Extractor: {gameState.connections?.guesser ? 'Online' : 'Offline'}
+                  </span>
+                </div>
+              </div>
+            )}
           </section>
 
-          {/* ── Right: Action Terminal ───────────────────────────────── */}
-          <section className="glass-panel p-8 rotate-[-1deg] bg-[#e3d5c1] border-[#2c2825] flex flex-col justify-center">
-            
-            {screen === 'home' && (
-              <div className="space-y-6">
-                <div>
-                  <p className="section-label">Operative Profile</p>
-                  <input
-                    value={nickname}
-                    onChange={(e) => setNickname(e.target.value.toUpperCase())}
-                    placeholder="ENTER BADGE NAME"
-                    className="glass-input uppercase"
-                  />
-                </div>
-                <div className="flex flex-col gap-4 pt-4">
-                  <button onClick={handleCreate} disabled={loading} className="btn-primary py-4">
-                    {loading ? 'ESTABLISHING...' : 'OPEN NEW SECURE LINE'}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setError('')
-                      setScreen('join')
-                    }}
-                    className="btn-secondary py-4"
-                  >
-                    ENTER ACCESS CODE
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {screen === 'join' && (
-              <div className="space-y-6">
-                <div>
-                  <p className="section-label">Operative Profile</p>
-                  <input
-                    value={nickname}
-                    onChange={(e) => setNickname(e.target.value.toUpperCase())}
-                    placeholder="ENTER BADGE NAME"
-                    className="glass-input uppercase"
-                  />
-                </div>
-                <div>
-                  <p className="section-label">Access Code</p>
-                  <input
-                    value={inputCode}
-                    onChange={(e) => setInputCode(e.target.value.toUpperCase())}
-                    placeholder="6-LETTER CODE"
-                    maxLength={6}
-                    className="glass-input uppercase text-center font-black tracking-widest text-2xl"
-                  />
-                </div>
-                <div className="flex flex-col sm:flex-row gap-4 pt-4">
-                  <button onClick={handleJoin} disabled={loading} className="btn-primary flex-1 py-4">
-                    {loading ? 'JOINING...' : 'CONNECT'}
-                  </button>
-                  <button onClick={() => setScreen('home')} className="btn-secondary flex-1 py-4">
-                    CANCEL
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {screen === 'create' && (
-              <div className="text-center space-y-8">
-                <p className="section-label">Access Code Generated</p>
-                <p className="text-6xl font-black tracking-[0.2em] border-y-4 border-[#2c2825] py-6 my-8">
-                  {roomCode}
-                </p>
-                <p className="font-bold uppercase text-sm opacity-80">Awaiting partner connection...</p>
-                <button onClick={handleCopyRoomCode} className="btn-secondary py-3 px-8 text-sm">
-                  {copied ? 'COPIED TO CLIPBOARD' : 'COPY CODE'}
-                </button>
-              </div>
-            )}
-
-            {screen === 'word-entry' && role === 'word-giver' && (
-              <div className="space-y-6">
-                <p className="section-label">You are the Informant</p>
-                <p className="font-bold uppercase text-sm mb-6">Type the secret evidence word. Your partner will attempt to extract it.</p>
-                
-                <div>
-                  <input
-                    value={wordInput}
-                    onChange={(e) => setWordInput(e.target.value.replace(/[^a-zA-Z]/g, '').toUpperCase())}
-                    placeholder="ENTER SECRET WORD"
-                    maxLength={20}
-                    className="glass-input uppercase text-center font-black tracking-widest text-2xl"
-                  />
-                </div>
-                <button onClick={handleSubmitWord} className="btn-primary w-full py-4 mt-4">
-                  LOG EVIDENCE
-                </button>
-              </div>
-            )}
-
-            {screen === 'game' && gameState && (
-              <div className="space-y-8">
-                <div className="grid grid-cols-2 gap-4 border-b-2 border-[#2c2825] pb-6">
-                  <div>
-                    <p className="text-xs font-bold uppercase opacity-60">Informant</p>
-                    <p className="font-black text-xl">{gameState.wordGiver}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold uppercase opacity-60">Extractor</p>
-                    <p className="font-black text-xl">{gameState.guesser || 'WAITING...'}</p>
-                  </div>
-                </div>
-
-                {gameState.maskedWord && (
-                  <div className="text-center">
-                    <p className="section-label">Classified Word</p>
-                    <div className="flex flex-wrap justify-center gap-2 mt-4 mb-4">
-                      {gameState.maskedWord.split(' ').map((letter, index) => (
-                        <div key={`${letter}-${index}`} className="w-10 h-12 border-b-4 border-[#2c2825] flex items-center justify-center text-3xl font-bold uppercase">
-                          {letter}
-                        </div>
-                      ))}
+          <section className="glass-panel p-8 rotate-[-1deg] bg-[#e3d5c1] border-[#2c2825] flex flex-col gap-8">
+            {(screen === 'home' || screen === 'join' || screen === 'create' || screen === 'word-entry' || screen === 'game') && (
+              <div>
+                {screen === 'home' && (
+                  <div className="space-y-6">
+                    <div>
+                      <p className="section-label">Operative Profile</p>
+                      <input
+                        value={nickname}
+                        onChange={(event) => setNickname(event.target.value.toUpperCase())}
+                        placeholder="ENTER BADGE NAME"
+                        className="glass-input uppercase"
+                      />
                     </div>
-                    <p className="font-bold uppercase text-sm opacity-80">
-                      Strikes Remaining: <span className="text-xl font-black">{gameState.attemptsLeft}</span> / 6
+                    <div className="flex flex-col gap-4 pt-4">
+                      <button onClick={handleCreate} disabled={loading} className="btn-primary py-4">
+                        {loading ? 'ESTABLISHING...' : 'OPEN NEW SECURE LINE'}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setError('')
+                          setScreen('join')
+                        }}
+                        className="btn-secondary py-4"
+                      >
+                        ENTER ACCESS CODE
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {screen === 'join' && (
+                  <div className="space-y-6">
+                    <div>
+                      <p className="section-label">Operative Profile</p>
+                      <input
+                        value={nickname}
+                        onChange={(event) => setNickname(event.target.value.toUpperCase())}
+                        placeholder="ENTER BADGE NAME"
+                        className="glass-input uppercase"
+                      />
+                    </div>
+                    <div>
+                      <p className="section-label">Access Code</p>
+                      <input
+                        value={inputCode}
+                        onChange={(event) => setInputCode(event.target.value.toUpperCase())}
+                        placeholder="6-LETTER CODE"
+                        maxLength={6}
+                        className="glass-input uppercase text-center font-black tracking-widest text-2xl"
+                      />
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                      <button onClick={handleJoin} disabled={loading} className="btn-primary flex-1 py-4">
+                        {loading ? 'JOINING...' : 'CONNECT'}
+                      </button>
+                      <button onClick={() => setScreen('home')} className="btn-secondary flex-1 py-4">
+                        CANCEL
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {screen === 'create' && (
+                  <div className="text-center space-y-8">
+                    <p className="section-label">Access Code Generated</p>
+                    <p className="text-6xl font-black tracking-[0.2em] border-y-4 border-[#2c2825] py-6 my-8">
+                      {roomCode}
                     </p>
+                    <p className="font-bold uppercase text-sm opacity-80">Awaiting partner connection...</p>
+                    <button onClick={handleCopyRoomCode} className="btn-secondary py-3 px-8 text-sm">
+                      {copied ? 'COPIED TO CLIPBOARD' : 'COPY CODE'}
+                    </button>
                   </div>
                 )}
 
-                {isGuesser && gameState.status === 'ongoing' && (
-                  <div className="border-t-2 border-[#2c2825] pt-6">
-                    <p className="section-label mb-4">Typewriter</p>
-                    <div className="flex flex-wrap justify-center gap-2">
-                      {ALPHABET.map((letter) => {
-                        const correct = gameState.guesses?.includes(letter) && !gameState.wrongGuesses?.includes(letter)
-                        const wrong = gameState.wrongGuesses?.includes(letter)
-                        const isUsed = usedLetters.has(letter)
+                {screen === 'word-entry' && role === 'word-giver' && (
+                  <div className="space-y-6">
+                    <p className="section-label">You are the Informant</p>
+                    <p className="font-bold uppercase text-sm mb-6">Type the secret evidence word. Your partner will attempt to extract it.</p>
 
-                        let btnClass = "w-10 h-10 rounded-full border-2 border-[#2c2825] text-lg font-bold uppercase transition-all shadow-[2px_2px_0px_#2c2825]"
-            
-                        if (!isUsed) {
-                          btnClass += " bg-[#d4c5b0] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-none"
-                        } else if (correct) {
-                          btnClass += " bg-[#2c2825] text-[#d4c5b0] shadow-none translate-y-[2px] translate-x-[2px]"
-                        } else if (wrong) {
-                          btnClass += " bg-[#e3d5c1] text-[#2c2825] opacity-50 shadow-none translate-y-[2px] translate-x-[2px] relative overflow-hidden"
-                        }
-
-                        return (
-                          <button
-                            key={letter}
-                            onClick={() => handleGuess(letter)}
-                            disabled={isUsed}
-                            className={btnClass}
-                          >
-                            {letter}
-                            {wrong && <div className="absolute inset-0 bg-[#8b0000] opacity-80 w-full h-[2px] top-1/2 -mt-[1px] -rotate-45 pointer-events-none"></div>}
-                          </button>
-                        )
-                      })}
+                    <div>
+                      <input
+                        value={wordInput}
+                        onChange={(event) => setWordInput(event.target.value.replace(/[^a-zA-Z]/g, '').toUpperCase())}
+                        placeholder="ENTER SECRET WORD"
+                        maxLength={20}
+                        className="glass-input uppercase text-center font-black tracking-widest text-2xl"
+                      />
                     </div>
-                  </div>
-                )}
-
-                {gameState.status === 'won' && (
-                  <div className="text-center border-t-4 border-dashed border-[#2c2825] pt-8">
-                    <p className="text-3xl font-black uppercase tracking-widest text-[#10B981] mb-2">CASE SOLVED</p>
-                    {gameState.word && <p className="text-xl font-bold uppercase mb-6">{gameState.word}</p>}
-                    <button onClick={handleRematch} className="btn-primary py-4 px-8">
-                      OPEN NEW CASE
+                    <button onClick={handleSubmitWord} className="btn-primary w-full py-4 mt-4">
+                      LOG EVIDENCE
                     </button>
                   </div>
                 )}
 
-                {gameState.status === 'lost' && (
-                  <div className="text-center border-t-4 border-dashed border-[#2c2825] pt-8">
-                    <p className="text-3xl font-black uppercase tracking-widest text-[#8b0000] mb-2">CASE FAILED</p>
-                    {gameState.word && <p className="text-lg font-bold uppercase mb-6 opacity-80">True Word: <span className="text-xl">{gameState.word}</span></p>}
-                    <button onClick={handleRematch} className="btn-primary py-4 px-8">
-                      RETRY CASE
-                    </button>
+                {screen === 'game' && gameState && (
+                  <div className="space-y-8">
+                    <div className="grid grid-cols-2 gap-4 border-b-2 border-[#2c2825] pb-6">
+                      <div>
+                        <p className="text-xs font-bold uppercase opacity-60">Informant</p>
+                        <p className="font-black text-xl">{gameState.wordGiver}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold uppercase opacity-60">Extractor</p>
+                        <p className="font-black text-xl">{gameState.guesser || 'WAITING...'}</p>
+                      </div>
+                    </div>
+
+                    {gameState.maskedWord && (
+                      <div className="text-center">
+                        <p className="section-label">Classified Word</p>
+                        <div className="flex flex-wrap justify-center gap-2 mt-4 mb-4">
+                          {gameState.maskedWord.split(' ').map((letter, index) => (
+                            <div key={`${letter}-${index}`} className="w-10 h-12 border-b-4 border-[#2c2825] flex items-center justify-center text-3xl font-bold uppercase">
+                              {letter}
+                            </div>
+                          ))}
+                        </div>
+                        <p className="font-bold uppercase text-sm opacity-80">
+                          Strikes Remaining: <span className="text-xl font-black">{gameState.attemptsLeft}</span> / 6
+                        </p>
+                      </div>
+                    )}
+
+                    {isGuesser && gameState.status === 'ongoing' && (
+                      <div className="border-t-2 border-[#2c2825] pt-6">
+                        <p className="section-label mb-4">Typewriter</p>
+                        <div className="flex flex-wrap justify-center gap-2">
+                          {ALPHABET.map((letter) => {
+                            const correct = gameState.guesses?.includes(letter) && !gameState.wrongGuesses?.includes(letter)
+                            const wrong = gameState.wrongGuesses?.includes(letter)
+                            const isUsed = usedLetters.has(letter)
+
+                            let btnClass = 'w-10 h-10 rounded-full border-2 border-[#2c2825] text-lg font-bold uppercase transition-all shadow-[2px_2px_0px_#2c2825]'
+
+                            if (!isUsed) {
+                              btnClass += ' bg-[#d4c5b0] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-none'
+                            } else if (correct) {
+                              btnClass += ' bg-[#2c2825] text-[#d4c5b0] shadow-none translate-y-[2px] translate-x-[2px]'
+                            } else if (wrong) {
+                              btnClass += ' bg-[#e3d5c1] text-[#2c2825] opacity-50 shadow-none translate-y-[2px] translate-x-[2px] relative overflow-hidden'
+                            }
+
+                            return (
+                              <button
+                                key={letter}
+                                onClick={() => handleGuess(letter)}
+                                disabled={isUsed}
+                                className={btnClass}
+                              >
+                                {letter}
+                                {wrong && <div className="absolute inset-0 bg-[#8b0000] opacity-80 w-full h-[2px] top-1/2 -mt-[1px] -rotate-45 pointer-events-none"></div>}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {gameState.status === 'won' && (
+                      <div className="text-center border-t-4 border-dashed border-[#2c2825] pt-8">
+                        <p className="text-3xl font-black uppercase tracking-widest text-[#10B981] mb-2">CASE SOLVED</p>
+                        {gameState.word && <p className="text-xl font-bold uppercase mb-6">{gameState.word}</p>}
+                        <button onClick={handleRematch} className="btn-primary py-4 px-8">
+                          OPEN NEW CASE
+                        </button>
+                      </div>
+                    )}
+
+                    {gameState.status === 'lost' && (
+                      <div className="text-center border-t-4 border-dashed border-[#2c2825] pt-8">
+                        <p className="text-3xl font-black uppercase tracking-widest text-[#8b0000] mb-2">CASE FAILED</p>
+                        {gameState.word && <p className="text-lg font-bold uppercase mb-6 opacity-80">True Word: <span className="text-xl">{gameState.word}</span></p>}
+                        <button onClick={handleRematch} className="btn-primary py-4 px-8">
+                          RETRY CASE
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
+              </div>
+            )}
+
+            {roomCode && (
+              <div className="border-t-2 border-dashed border-[#2c2825] pt-6">
+                <div className="mb-4 flex items-center justify-between">
+                  <div>
+                    <p className="section-label mb-1">Field Chat</p>
+                    <p className="font-bold uppercase text-xs opacity-70">Room {roomCode}</p>
+                  </div>
+                  <span className="font-bold uppercase text-xs opacity-60">
+                    {chatMessages.length} message{chatMessages.length === 1 ? '' : 's'}
+                  </span>
+                </div>
+
+                <div className="mb-4 max-h-64 space-y-3 overflow-y-auto border-2 border-[#2c2825] bg-[#f1e7d8] p-3">
+                  {chatMessages.length === 0 ? (
+                    <p className="font-bold uppercase text-xs opacity-60">No messages yet.</p>
+                  ) : (
+                    chatMessages.map((message, index) => (
+                      <div key={`${message.senderNickname}-${message.createdAt || index}-${index}`} className="border-l-4 border-[#2c2825] pl-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="font-black uppercase text-sm">{message.senderNickname}</p>
+                          <span className="text-[10px] font-bold uppercase opacity-50">{message.senderRole}</span>
+                        </div>
+                        <p className="text-sm font-bold">{message.message}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <div className="flex gap-3">
+                  <input
+                    value={chatInput}
+                    onChange={(event) => setChatInput(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') handleSendChat()
+                    }}
+                    placeholder="SEND A MESSAGE"
+                    maxLength={240}
+                    className="glass-input flex-1 uppercase"
+                  />
+                  <button onClick={handleSendChat} className="btn-primary px-5 py-3">
+                    SEND
+                  </button>
+                </div>
               </div>
             )}
           </section>

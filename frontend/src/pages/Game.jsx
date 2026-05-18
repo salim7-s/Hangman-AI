@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useEffectEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import HangmanScene from '../components/HangmanScene'
 import Keyboard from '../components/Keyboard'
@@ -49,17 +49,6 @@ export default function Game() {
     return () => window.removeEventListener('keydown', handler)
   }, [status, navigate])
 
-  // Automatically trigger AI guesses in Reverse mode
-  useEffect(() => {
-    if (mode === 'player-vs-ai' && status === 'ongoing' && !loading && !aiThinking) {
-      // Delay slightly so the UI doesn't feel instantly jarring
-      const timer = setTimeout(() => {
-        handleGuess('')
-      }, 1500)
-      return () => clearTimeout(timer)
-    }
-  }, [mode, status, loading, aiThinking])
-
   async function handleGuess(letter) {
     if (loading || aiThinking || status !== 'ongoing') return
     setLoading(true)
@@ -103,6 +92,20 @@ export default function Game() {
       setLoading(false)
     }
   }
+
+  const queueAiTurn = useEffectEvent(() => {
+    handleGuess('')
+  })
+
+  // Automatically trigger AI guesses in reverse mode without re-subscribing on every render.
+  useEffect(() => {
+    if (mode === 'player-vs-ai' && status === 'ongoing' && !loading && !aiThinking) {
+      const timer = setTimeout(() => {
+        queueAiTurn()
+      }, 1500)
+      return () => clearTimeout(timer)
+    }
+  }, [mode, status, loading, aiThinking])
 
   function handlePlayAgain() {
     navigate('/')

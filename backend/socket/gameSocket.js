@@ -1,159 +1,405 @@
-// backend/socket/gameSocket.js
-// Room-based multiplayer: word-giver vs guesser, no accounts needed
+const mongoose = require('mongoose')
 
-const rooms = {} // { roomCode: { wordGiver, guesser, word, maskedWord, guesses, wrongGuesses, status } }
+const memRooms = {}
+let RoomModel = null
+
+function isMongoConnected() {
+  return mongoose.connection.readyState === 1
+}
+
+function getRoomModel() {
+  if (!RoomModel && isMongoConnected()) {
+    RoomModel = require('../models/MultiplayerRoom')
+  }
+  return RoomModel
+}
 
 function generateCode() {
   return Math.random().toString(36).slice(2, 8).toUpperCase()
 }
 
 function buildMasked(word, guesses) {
-  return word.split('').map(ch => (guesses.includes(ch) ? ch : '_')).join(' ')
+  return word.split('').map((ch) => (guesses.includes(ch) ? ch : '_')).join(' ')
+}
+
+function toPlainRoom(room) {
+  if (!room) return null
+  return typeof room.toObject === 'function' ? room.toObject() : room
+}
+
+async function getRoomByCode(code) {
+  const Room = getRoomModel()
+  if (Room) return Room.findOne({ code })
+  return memRooms[code] || null
+}
+
+async function createRoomRecord(roomData) {
+  const Room = getRoomModel()
+  if (Room) return Room.create(roomData)
+
+  memRooms[roomData.code] = { ...roomData }
+  return memRooms[roomData.code]
+}
+
+async function saveRoom(room) {
+  const Room = getRoomModel()
+  if (Room) return room.save()
+
+  memRooms[room.code] = room
+  return room
+}
+
+async function generateUniqueCode() {
+  let code
+  do {
+    code = generateCode()
+  } while (await getRoomByCode(code))
+  return code
+}
+
+function getParticipantRole(room, socketId) {
+  if (room.wordGiver?.socketId === socketId) return 'word-giver'
+  if (room.guesser?.socketId === socketId) return 'guesser'
+  return null
+}
+
+function getParticipantByRole(room, role) {
+  return role === 'word-giver' ? room.wordGiver : room.guesser
+}
+
+function getActiveRoomCodeForSocket(socketId) {
+  for (const room of Object.values(memRooms)) {
+    if (room.wordGiver?.socketId === socketId || room.guesser?.socketId === socketId) {
+      return room.code
+    }
+  }
+  return null
+}
+
+function sanitize(room) {
+  const plainRoom = toPlainRoom(room)
+
+  return {
+    code: plainRoom.code,
+    status: plainRoom.status,
+    maskedWord: plainRoom.maskedWord,
+    guesses: plainRoom.guesses,
+    wrongGuesses: plainRoom.wrongGuesses,
+    attemptsLeft: plainRoom.maxAttempts - plainRoom.wrongGuesses.length,
+    wordGiver: plainRoom.wordGiver?.nickname,
+    guesser: plainRoom.guesser?.nickname || null,
+    connections: {
+      wordGiver: Boolean(plainRoom.wordGiver?.connected),
+      guesser: Boolean(plainRoom.guesser?.connected),
+    },
+    chatMessages: (plainRoom.chatMessages || []).map((message) => ({
+      senderRole: message.senderRole,
+      senderNickname: message.senderNickname,
+      message: message.message,
+      createdAt: message.createdAt,
+    })),
+  }
+}
+
+function resolveLobbyScreen(role, status) {
+  if (status === 'waiting' && role === 'word-giver') return 'create'
+  if (status === 'word-entry' && role === 'word-giver') return 'word-entry'
+  return 'game'
 }
 
 module.exports = function setupSocket(io) {
   io.on('connection', (socket) => {
     console.log(`Socket connected: ${socket.id}`)
 
-    // ── Create Room ──────────────────────────────────────────────────
-    socket.on('create-room', ({ nickname }) => {
-      let code
-      do { code = generateCode() } while (rooms[code])
-
-      rooms[code] = {
-        code,
-        wordGiver:   { id: socket.id, nickname: nickname || 'Player 1' },
-        guesser:     null,
-        word:        null,
-        maskedWord:  null,
-        guesses:     [],
-        wrongGuesses:[],
-        maxAttempts: 6,
-        status:      'waiting', // waiting | word-entry | ongoing | won | lost
-      }
-
-      socket.join(code)
-      socket.emit('room-created', { code, role: 'word-giver' })
-      console.log(`Room created: ${code} by ${nickname}`)
-    })
-
-    // ── Join Room ────────────────────────────────────────────────────
-    socket.on('join-room', ({ code, nickname }) => {
-      const room = rooms[code]
-      if (!room) return socket.emit('error', { message: 'Room not found' })
-      if (room.guesser) return socket.emit('error', { message: 'Room is full' })
-      if (room.status !== 'waiting') return socket.emit('error', { message: 'Game already started' })
-
-      room.guesser = { id: socket.id, nickname: nickname || 'Player 2' }
-      room.status  = 'word-entry'
-      socket.join(code)
-
-      socket.emit('room-joined', { code, role: 'guesser', wordGiverNickname: room.wordGiver.nickname })
-      io.to(room.wordGiver.id).emit('guesser-joined', { guesserNickname: room.guesser.nickname })
-      io.to(code).emit('game-state', sanitize(room))
-    })
-
-    // ── Word Giver Submits Word ──────────────────────────────────────
-    socket.on('submit-word', ({ code, word }) => {
-      const room = rooms[code]
-      if (!room) return socket.emit('error', { message: 'Room not found' })
-      if (socket.id !== room.wordGiver.id) return socket.emit('error', { message: 'Only the word-giver can submit the word' })
-      if (room.status !== 'word-entry') return socket.emit('error', { message: 'Not the right time to submit a word' })
-
-      const clean = word.trim().toUpperCase()
-      if (!/^[A-Z]+$/.test(clean) || clean.length < 2 || clean.length > 20)
-        return socket.emit('error', { message: 'Word must be 2-20 letters only' })
-
-      room.word      = clean
-      room.maskedWord = buildMasked(clean, [])
-      room.status    = 'ongoing'
-
-      io.to(code).emit('game-started', { maskedWord: room.maskedWord, attemptsLeft: room.maxAttempts })
-      io.to(code).emit('game-state', sanitize(room))
-    })
-
-    // ── Guesser Makes a Guess ────────────────────────────────────────
-    socket.on('guess-letter', ({ code, letter }) => {
-      const room = rooms[code]
-      if (!room) return socket.emit('error', { message: 'Room not found' })
-      if (socket.id !== room.guesser?.id) return socket.emit('error', { message: 'Only the guesser can guess letters' })
-      if (room.status !== 'ongoing') return socket.emit('error', { message: 'Game is not active' })
-
-      const L = letter.toUpperCase()
-      if (!/^[A-Z]$/.test(L)) return socket.emit('error', { message: 'Invalid letter' })
-      if (room.guesses.includes(L)) return socket.emit('error', { message: 'Already guessed' })
-
-      room.guesses.push(L)
-
-      if (room.word.includes(L)) {
-        room.maskedWord = buildMasked(room.word, room.guesses)
-      } else {
-        room.wrongGuesses.push(L)
-      }
-
-      const attemptsLeft = room.maxAttempts - room.wrongGuesses.length
-
-      if (!room.maskedWord.includes('_')) {
-        room.status = 'won'
-      } else if (attemptsLeft <= 0) {
-        room.status = 'lost'
-      }
-
-      const state = sanitize(room)
-      if (room.status !== 'ongoing') state.word = room.word
-
-      io.to(code).emit('game-state', state)
-    })
-
-    // ── Rematch ──────────────────────────────────────────────────────
-    socket.on('rematch', ({ code }) => {
-      const room = rooms[code]
-      if (!room) return
-
-      // Swap roles
-      const tmp        = room.wordGiver
-      room.wordGiver   = room.guesser
-      room.guesser     = tmp
-      room.word        = null
-      room.maskedWord  = null
-      room.guesses     = []
-      room.wrongGuesses= []
-      room.status      = 'word-entry'
-
-      io.to(code).emit('rematch-started', {
-        wordGiverNickname: room.wordGiver.nickname,
-        guesserNickname:   room.guesser.nickname
-      })
-      io.to(code).emit('game-state', sanitize(room))
-    })
-
-    // ── Disconnect ───────────────────────────────────────────────────
-    socket.on('disconnect', () => {
-      for (const [code, room] of Object.entries(rooms)) {
-        const isWordGiver = room.wordGiver?.id === socket.id
-        const isGuesser   = room.guesser?.id   === socket.id
-        if (isWordGiver || isGuesser) {
-          io.to(code).emit('player-left', {
-            nickname: isWordGiver ? room.wordGiver.nickname : room.guesser.nickname
-          })
-          delete rooms[code]
-          break
+    socket.on('create-room', async ({ nickname }) => {
+      try {
+        const cleanNickname = (nickname || '').trim()
+        if (!/^[A-Z0-9 ]{2,20}$/i.test(cleanNickname)) {
+          return socket.emit('error', { message: 'Nickname must be 2-20 letters or numbers' })
         }
+
+        const code = await generateUniqueCode()
+        const room = await createRoomRecord({
+          code,
+          wordGiver: {
+            socketId: socket.id,
+            nickname: cleanNickname,
+            connected: true,
+            lastSeenAt: new Date(),
+          },
+          guesser: null,
+          word: null,
+          maskedWord: null,
+          guesses: [],
+          wrongGuesses: [],
+          maxAttempts: 6,
+          status: 'waiting',
+          chatMessages: [],
+        })
+
+        socket.join(code)
+        socket.emit('room-created', {
+          code,
+          role: 'word-giver',
+          screen: 'create',
+          room: sanitize(room),
+        })
+      } catch (error) {
+        console.error('create-room failed:', error)
+        socket.emit('error', { message: 'Could not create room' })
+      }
+    })
+
+    socket.on('join-room', async ({ code, nickname }) => {
+      try {
+        const cleanCode = (code || '').trim().toUpperCase()
+        const cleanNickname = (nickname || '').trim()
+        if (!cleanCode) return socket.emit('error', { message: 'Room code is required' })
+        if (!/^[A-Z0-9 ]{2,20}$/i.test(cleanNickname)) {
+          return socket.emit('error', { message: 'Nickname must be 2-20 letters or numbers' })
+        }
+
+        const room = await getRoomByCode(cleanCode)
+        if (!room) return socket.emit('error', { message: 'Room not found' })
+
+        let role = null
+        const wordGiverNickname = room.wordGiver?.nickname
+
+        if (room.wordGiver && !room.wordGiver.connected && room.wordGiver.nickname === cleanNickname) {
+          room.wordGiver.socketId = socket.id
+          room.wordGiver.connected = true
+          room.wordGiver.lastSeenAt = new Date()
+          role = 'word-giver'
+        } else if (room.guesser && !room.guesser.connected && room.guesser.nickname === cleanNickname) {
+          room.guesser.socketId = socket.id
+          room.guesser.connected = true
+          room.guesser.lastSeenAt = new Date()
+          role = 'guesser'
+        } else if (!room.guesser && room.status === 'waiting') {
+          room.guesser = {
+            socketId: socket.id,
+            nickname: cleanNickname,
+            connected: true,
+            lastSeenAt: new Date(),
+          }
+          room.status = 'word-entry'
+          role = 'guesser'
+        } else {
+          return socket.emit('error', { message: 'Room is full or already in progress' })
+        }
+
+        await saveRoom(room)
+        socket.join(cleanCode)
+
+        socket.emit('room-joined', {
+          code: cleanCode,
+          role,
+          screen: resolveLobbyScreen(role, room.status),
+          wordGiverNickname,
+          room: sanitize(room),
+          reconnected: room.status !== 'waiting' && room.status !== 'word-entry',
+        })
+
+        if (role === 'guesser' && room.status === 'word-entry') {
+          io.to(room.wordGiver.socketId).emit('guesser-joined', {
+            guesserNickname: room.guesser.nickname,
+          })
+        } else {
+          io.to(cleanCode).emit('game-state', sanitize(room))
+        }
+      } catch (error) {
+        console.error('join-room failed:', error)
+        socket.emit('error', { message: 'Could not join room' })
+      }
+    })
+
+    socket.on('submit-word', async ({ code, word }) => {
+      try {
+        const room = await getRoomByCode((code || '').trim().toUpperCase())
+        if (!room) return socket.emit('error', { message: 'Room not found' })
+        if (socket.id !== room.wordGiver?.socketId) {
+          return socket.emit('error', { message: 'Only the word-giver can submit the word' })
+        }
+        if (room.status !== 'word-entry') {
+          return socket.emit('error', { message: 'Not the right time to submit a word' })
+        }
+
+        const cleanWord = (word || '').trim().toUpperCase()
+        if (!/^[A-Z]+$/.test(cleanWord) || cleanWord.length < 2 || cleanWord.length > 20) {
+          return socket.emit('error', { message: 'Word must be 2-20 letters only' })
+        }
+
+        room.word = cleanWord
+        room.maskedWord = buildMasked(cleanWord, [])
+        room.status = 'ongoing'
+        await saveRoom(room)
+
+        io.to(room.code).emit('game-started', {
+          maskedWord: room.maskedWord,
+          attemptsLeft: room.maxAttempts,
+        })
+        io.to(room.code).emit('game-state', sanitize(room))
+      } catch (error) {
+        console.error('submit-word failed:', error)
+        socket.emit('error', { message: 'Could not submit word' })
+      }
+    })
+
+    socket.on('guess-letter', async ({ code, letter }) => {
+      try {
+        const room = await getRoomByCode((code || '').trim().toUpperCase())
+        if (!room) return socket.emit('error', { message: 'Room not found' })
+        if (socket.id !== room.guesser?.socketId) {
+          return socket.emit('error', { message: 'Only the guesser can guess letters' })
+        }
+        if (room.status !== 'ongoing') {
+          return socket.emit('error', { message: 'Game is not active' })
+        }
+
+        const normalizedLetter = (letter || '').toUpperCase()
+        if (!/^[A-Z]$/.test(normalizedLetter)) {
+          return socket.emit('error', { message: 'Invalid letter' })
+        }
+        if (room.guesses.includes(normalizedLetter)) {
+          return socket.emit('error', { message: 'Already guessed' })
+        }
+
+        room.guesses.push(normalizedLetter)
+
+        if (room.word.includes(normalizedLetter)) {
+          room.maskedWord = buildMasked(room.word, room.guesses)
+        } else {
+          room.wrongGuesses.push(normalizedLetter)
+        }
+
+        const attemptsLeft = room.maxAttempts - room.wrongGuesses.length
+        if (!room.maskedWord.includes('_')) {
+          room.status = 'won'
+        } else if (attemptsLeft <= 0) {
+          room.status = 'lost'
+        }
+
+        await saveRoom(room)
+
+        const state = sanitize(room)
+        if (room.status !== 'ongoing') state.word = room.word
+        io.to(room.code).emit('game-state', state)
+      } catch (error) {
+        console.error('guess-letter failed:', error)
+        socket.emit('error', { message: 'Could not process guess' })
+      }
+    })
+
+    socket.on('send-chat-message', async ({ code, message }) => {
+      try {
+        const room = await getRoomByCode((code || '').trim().toUpperCase())
+        if (!room) return socket.emit('error', { message: 'Room not found' })
+
+        const role = getParticipantRole(room, socket.id)
+        if (!role) return socket.emit('error', { message: 'Join the room before chatting' })
+
+        const cleanMessage = (message || '').trim().replace(/\s+/g, ' ')
+        if (!cleanMessage) return socket.emit('error', { message: 'Message cannot be empty' })
+        if (cleanMessage.length > 240) {
+          return socket.emit('error', { message: 'Message must be 240 characters or less' })
+        }
+
+        const participant = getParticipantByRole(room, role)
+        room.chatMessages.push({
+          senderRole: role,
+          senderNickname: participant.nickname,
+          message: cleanMessage,
+          createdAt: new Date(),
+        })
+
+        room.chatMessages = room.chatMessages.slice(-50)
+        await saveRoom(room)
+
+        io.to(room.code).emit('chat-message', sanitize(room).chatMessages.at(-1))
+      } catch (error) {
+        console.error('send-chat-message failed:', error)
+        socket.emit('error', { message: 'Could not send message' })
+      }
+    })
+
+    socket.on('rematch', async ({ code }) => {
+      try {
+        const room = await getRoomByCode((code || '').trim().toUpperCase())
+        if (!room) return
+        if (!room.wordGiver || !room.guesser) return
+
+        const temp = room.wordGiver
+        room.wordGiver = room.guesser
+        room.guesser = temp
+        room.word = null
+        room.maskedWord = null
+        room.guesses = []
+        room.wrongGuesses = []
+        room.status = 'word-entry'
+        await saveRoom(room)
+
+        io.to(room.code).emit('rematch-started', {
+          wordGiverNickname: room.wordGiver.nickname,
+          guesserNickname: room.guesser.nickname,
+        })
+        if (room.wordGiver?.socketId) {
+          io.to(room.wordGiver.socketId).emit('role-updated', {
+            role: 'word-giver',
+            screen: 'word-entry',
+          })
+        }
+        if (room.guesser?.socketId) {
+          io.to(room.guesser.socketId).emit('role-updated', {
+            role: 'guesser',
+            screen: 'game',
+          })
+        }
+        io.to(room.code).emit('game-state', sanitize(room))
+      } catch (error) {
+        console.error('rematch failed:', error)
+        socket.emit('error', { message: 'Could not start rematch' })
+      }
+    })
+
+    socket.on('disconnect', async () => {
+      try {
+        const Room = getRoomModel()
+        let room = null
+
+        if (Room) {
+          room = await Room.findOne({
+            $or: [{ 'wordGiver.socketId': socket.id }, { 'guesser.socketId': socket.id }],
+          })
+        } else {
+          const code = getActiveRoomCodeForSocket(socket.id)
+          room = code ? memRooms[code] : null
+        }
+
+        if (!room) return
+
+        let nickname = null
+        if (room.wordGiver?.socketId === socket.id) {
+          room.wordGiver.socketId = null
+          room.wordGiver.connected = false
+          room.wordGiver.lastSeenAt = new Date()
+          nickname = room.wordGiver.nickname
+        } else if (room.guesser?.socketId === socket.id) {
+          room.guesser.socketId = null
+          room.guesser.connected = false
+          room.guesser.lastSeenAt = new Date()
+          nickname = room.guesser.nickname
+        }
+
+        if (!room.wordGiver?.connected && !room.guesser?.connected) {
+          room.status = room.status === 'waiting' ? 'abandoned' : room.status
+        }
+
+        await saveRoom(room)
+        io.to(room.code).emit('player-left', { nickname })
+        io.to(room.code).emit('game-state', sanitize(room))
+      } catch (error) {
+        console.error('disconnect handling failed:', error)
       }
     })
   })
-}
-
-// Never expose word while game is ongoing
-function sanitize(room) {
-  return {
-    code:         room.code,
-    status:       room.status,
-    maskedWord:   room.maskedWord,
-    guesses:      room.guesses,
-    wrongGuesses: room.wrongGuesses,
-    attemptsLeft: room.maxAttempts - room.wrongGuesses.length,
-    wordGiver:    room.wordGiver?.nickname,
-    guesser:      room.guesser?.nickname,
-  }
 }
