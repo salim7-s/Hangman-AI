@@ -19,7 +19,7 @@ export default function MultiplayerLobby() {
   const { user } = useAuth()
 
   const [screen, setScreen] = useState('home')
-  const [nickname, setNickname] = useState('')
+  const [nickname, setNickname] = useState(() => user?.username?.toUpperCase() || '')
   const [roomCode, setRoomCode] = useState('')
   const [inputCode, setInputCode] = useState('')
   const [role, setRole] = useState(null)
@@ -34,12 +34,6 @@ export default function MultiplayerLobby() {
   const [info, setInfo] = useState('')
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
-
-  useEffect(() => {
-    if (user?.username && !nickname) {
-      setNickname(user.username.toUpperCase())
-    }
-  }, [user, nickname])
 
   useEffect(() => {
     const cleanups = [
