@@ -1,6 +1,17 @@
 import { useState } from 'react'
 import { useAuth } from '../context/auth-context'
 
+function getAuthErrorMessage(err) {
+  const backendMessage = err.response?.data?.error || err.response?.data?.message
+  if (backendMessage) return backendMessage
+
+  if (err.request) {
+    return 'SERVER UNREACHABLE. CHECK API URL, BACKEND STATUS, OR CORS SETTINGS.'
+  }
+
+  return 'REQUEST SETUP FAILED. TRY AGAIN.'
+}
+
 export default function AuthModal({ onClose }) {
   const { login, register } = useAuth()
   const [mode, setMode] = useState('login')
@@ -30,7 +41,7 @@ export default function AuthModal({ onClose }) {
 
       onClose()
     } catch (err) {
-      setError(err.response?.data?.error || 'OPERATION FAILED. TRY AGAIN.')
+      setError(getAuthErrorMessage(err))
     } finally {
       setLoading(false)
     }
