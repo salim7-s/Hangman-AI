@@ -3,6 +3,7 @@ const mongoose = require('mongoose')
 const participantSchema = new mongoose.Schema(
   {
     socketId: { type: String, default: null },
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     nickname: { type: String, required: true, trim: true },
     connected: { type: Boolean, default: true },
     lastSeenAt: { type: Date, default: Date.now },

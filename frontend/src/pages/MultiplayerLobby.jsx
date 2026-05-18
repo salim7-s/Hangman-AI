@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSocket } from '../hooks/useSocket'
+import { useAuth } from '../context/auth-context'
 import api from '../services/api'
+import HangmanScene from '../components/HangmanScene'
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
 
@@ -14,6 +16,7 @@ function getScreenForState(role, status, fallback = 'game') {
 export default function MultiplayerLobby() {
   const navigate = useNavigate()
   const { emit, on } = useSocket()
+  const { user } = useAuth()
 
   const [screen, setScreen] = useState('home')
   const [nickname, setNickname] = useState('')
@@ -31,6 +34,12 @@ export default function MultiplayerLobby() {
   const [info, setInfo] = useState('')
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    if (user?.username && !nickname) {
+      setNickname(user.username.toUpperCase())
+    }
+  }, [user, nickname])
 
   useEffect(() => {
     const cleanups = [
@@ -170,6 +179,8 @@ export default function MultiplayerLobby() {
 
   const isGuesser = role === 'guesser'
   const usedLetters = new Set(gameState?.guesses || [])
+  const hasActiveRoom = Boolean(roomCode) || screen === 'create' || screen === 'word-entry' || screen === 'game'
+  const wrongGuessCount = gameState?.wrongGuesses?.length || 0
   const stepText =
     screen === 'home'
       ? 'Sign the ledger to open a new line of inquiry or join an existing case.'
@@ -241,54 +252,69 @@ export default function MultiplayerLobby() {
           </section>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 fade-in-up">
-          <section className="glass-panel p-5 sm:rotate-[1deg] sm:p-8">
-            <p className="font-bold uppercase tracking-widest text-sm opacity-60 mb-2">Protocol 9</p>
-            <h1 className="mb-6 text-3xl font-black uppercase tracking-[0.12em] sm:text-4xl sm:tracking-widest">Partner <br />Inquiry Line</h1>
-            <p className="font-bold uppercase tracking-wider text-sm mb-8 opacity-80 border-l-4 border-[#2c2825] pl-4">
-              Secure socket connection established. Coordinate with a remote agent. One agent logs the evidence; the other extracts the truth.
-            </p>
+        <div className={`fade-in-up ${hasActiveRoom ? 'mx-auto max-w-4xl' : ''}`}>
+          <div className={`grid grid-cols-1 gap-8 ${hasActiveRoom ? '' : 'lg:grid-cols-2'}`}>
+            {!hasActiveRoom && (
+              <section className="glass-panel p-5 sm:rotate-[1deg] sm:p-8">
+                <p className="mb-2 text-sm font-bold uppercase tracking-widest opacity-60">Protocol 9</p>
+                <h1 className="mb-6 text-3xl font-black uppercase tracking-[0.12em] sm:text-4xl sm:tracking-widest">Partner <br />Inquiry Line</h1>
+                <p className="mb-8 border-l-4 border-[#2c2825] pl-4 text-sm font-bold uppercase tracking-wider opacity-80">
+                  Secure socket connection established. Coordinate with a remote agent. One agent logs the evidence; the other extracts the truth.
+                </p>
 
-            <div className="space-y-6">
-              <div className="border-2 border-[#2c2825] p-4 bg-[#e3d5c1] shadow-[4px_4px_0px_#2c2825]">
-                <p className="section-label mb-2">1. Badge In</p>
-                <p className="font-bold uppercase text-sm">Provide your operative nickname.</p>
-              </div>
-              <div className="border-2 border-[#2c2825] p-4 bg-[#e3d5c1] shadow-[4px_4px_0px_#2c2825]">
-                <p className="section-label mb-2">2. Establish Link</p>
-                <p className="font-bold uppercase text-sm">Create a secure line or use a known access code.</p>
-              </div>
-              <div className="border-2 border-[#2c2825] p-4 bg-[#e3d5c1] shadow-[4px_4px_0px_#2c2825]">
-                <p className="section-label mb-2">3. Field Chat</p>
-                <p className="font-bold uppercase text-sm">Use the room chat to coordinate in real time while the case is active.</p>
-              </div>
-            </div>
-
-            <div className="mt-8 border-t-2 border-dashed border-[#2c2825] pt-6">
-              <p className="section-label">Current Status</p>
-              <p className="font-bold uppercase text-lg mt-2">{stepText}</p>
-              {info && <p className="font-bold text-[#2d8a5f] uppercase text-sm mt-2">{info}</p>}
-              {error && <p className="font-bold text-[#8b0000] uppercase text-sm mt-2 border-2 border-[#8b0000] p-2 shake inline-block">{error}</p>}
-            </div>
-
-            {gameState && (
-              <div className="mt-8 border-t-2 border-dashed border-[#2c2825] pt-6">
-                <p className="section-label mb-3">Connection Status</p>
-                <div className="flex flex-wrap gap-3 uppercase text-sm font-bold">
-                  <span className={`border-2 px-3 py-2 ${gameState.connections?.wordGiver ? 'border-[#2d8a5f] text-[#2d8a5f]' : 'border-[#8b0000] text-[#8b0000]'}`}>
-                    Informant: {gameState.connections?.wordGiver ? 'Online' : 'Offline'}
-                  </span>
-                  <span className={`border-2 px-3 py-2 ${gameState.connections?.guesser ? 'border-[#2d8a5f] text-[#2d8a5f]' : 'border-[#8b0000] text-[#8b0000]'}`}>
-                    Extractor: {gameState.connections?.guesser ? 'Online' : 'Offline'}
-                  </span>
+                <div className="space-y-6">
+                  <div className="border-2 border-[#2c2825] bg-[#e3d5c1] p-4 shadow-[4px_4px_0px_#2c2825]">
+                    <p className="section-label mb-2">1. Badge In</p>
+                    <p className="text-sm font-bold uppercase">Provide your operative nickname.</p>
+                  </div>
+                  <div className="border-2 border-[#2c2825] bg-[#e3d5c1] p-4 shadow-[4px_4px_0px_#2c2825]">
+                    <p className="section-label mb-2">2. Establish Link</p>
+                    <p className="text-sm font-bold uppercase">Create a secure line or use a known access code.</p>
+                  </div>
+                  <div className="border-2 border-[#2c2825] bg-[#e3d5c1] p-4 shadow-[4px_4px_0px_#2c2825]">
+                    <p className="section-label mb-2">3. Field Chat</p>
+                    <p className="text-sm font-bold uppercase">Use the room chat to coordinate in real time while the case is active.</p>
+                  </div>
                 </div>
-              </div>
-            )}
-          </section>
 
-          <section className="glass-panel flex flex-col gap-8 border-[#2c2825] bg-[#e3d5c1] p-5 sm:rotate-[-1deg] sm:p-8">
-            {(screen === 'home' || screen === 'join' || screen === 'create' || screen === 'word-entry' || screen === 'game') && (
-              <div>
+                <div className="mt-8 border-t-2 border-dashed border-[#2c2825] pt-6">
+                  <p className="section-label">Current Status</p>
+                  <p className="mt-2 text-lg font-bold uppercase">{stepText}</p>
+                  {info && <p className="mt-2 text-sm font-bold uppercase text-[#2d8a5f]">{info}</p>}
+                  {error && <p className="mt-2 inline-block border-2 border-[#8b0000] p-2 text-sm font-bold uppercase text-[#8b0000] shake">{error}</p>}
+                </div>
+              </section>
+            )}
+
+            <section className={`glass-panel flex flex-col gap-8 border-[#2c2825] bg-[#e3d5c1] p-4 sm:p-8 ${hasActiveRoom ? '' : 'sm:rotate-[-1deg]'}`}>
+              {hasActiveRoom && (
+                <div className="border-b-2 border-dashed border-[#2c2825] pb-5">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-[0.18em] opacity-60">Live Session</p>
+                      <h1 className="text-3xl font-black uppercase tracking-[0.12em] sm:text-4xl">Partner Inquiry</h1>
+                    </div>
+                    <div className="flex flex-wrap gap-3 uppercase text-xs font-bold">
+                      {gameState && (
+                        <>
+                          <span className={`border-2 px-3 py-2 ${gameState.connections?.wordGiver ? 'border-[#2d8a5f] text-[#2d8a5f]' : 'border-[#8b0000] text-[#8b0000]'}`}>
+                            Informant: {gameState.connections?.wordGiver ? 'Online' : 'Offline'}
+                          </span>
+                          <span className={`border-2 px-3 py-2 ${gameState.connections?.guesser ? 'border-[#2d8a5f] text-[#2d8a5f]' : 'border-[#8b0000] text-[#8b0000]'}`}>
+                            Extractor: {gameState.connections?.guesser ? 'Online' : 'Offline'}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <p className="mt-4 text-sm font-bold uppercase opacity-80">{stepText}</p>
+                  {info && <p className="mt-2 text-sm font-bold uppercase text-[#2d8a5f]">{info}</p>}
+                  {error && <p className="mt-2 inline-block border-2 border-[#8b0000] p-2 text-sm font-bold uppercase text-[#8b0000] shake">{error}</p>}
+                </div>
+              )}
+
+              {(screen === 'home' || screen === 'join' || screen === 'create' || screen === 'word-entry' || screen === 'game') && (
+                <div>
                 {screen === 'home' && (
                   <div className="space-y-6">
                     <div>
@@ -383,88 +409,102 @@ export default function MultiplayerLobby() {
                 )}
 
                 {screen === 'game' && gameState && (
-                  <div className="space-y-8">
-                    <div className="grid grid-cols-1 gap-4 border-b-2 border-[#2c2825] pb-6 sm:grid-cols-2">
-                      <div>
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-1 gap-3 border-b-2 border-[#2c2825] pb-5 sm:grid-cols-2">
+                      <div className="border-2 border-[#2c2825] bg-[#f1e7d8] px-4 py-3">
                         <p className="text-xs font-bold uppercase opacity-60">Informant</p>
-                        <p className="font-black text-xl">{gameState.wordGiver}</p>
+                        <p className="break-words text-lg font-black sm:text-xl">{gameState.wordGiver}</p>
                       </div>
-                      <div>
+                      <div className="border-2 border-[#2c2825] bg-[#f1e7d8] px-4 py-3">
                         <p className="text-xs font-bold uppercase opacity-60">Extractor</p>
-                        <p className="font-black text-xl">{gameState.guesser || 'WAITING...'}</p>
+                        <p className="break-words text-lg font-black sm:text-xl">{gameState.guesser || 'WAITING...'}</p>
                       </div>
                     </div>
 
-                    {gameState.maskedWord && (
-                      <div className="text-center">
-                        <p className="section-label">Classified Word</p>
-                        <div className="flex flex-wrap justify-center gap-2 mt-4 mb-4">
-                          {gameState.maskedWord.split(' ').map((letter, index) => (
-                            <div key={`${letter}-${index}`} className="flex h-10 w-8 items-center justify-center border-b-4 border-[#2c2825] text-2xl font-bold uppercase sm:h-12 sm:w-10 sm:text-3xl">
-                              {letter}
+                    <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:items-start">
+                      <div className="lg:col-span-5">
+                        <div className="border-2 border-[#2c2825] bg-[radial-gradient(circle_at_top,_#f3eadf_0%,_#d9c7b0_72%)] p-2 sm:p-3">
+                          <HangmanScene
+                            wrongGuessCount={wrongGuessCount}
+                            skinName="default"
+                            isDead={gameState.status === 'lost'}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-6 lg:col-span-7">
+                        {gameState.maskedWord && (
+                          <div className="text-center lg:text-left">
+                            <p className="section-label">Classified Word</p>
+                            <div className="mb-4 mt-4 flex flex-wrap justify-center gap-2 lg:justify-start">
+                              {gameState.maskedWord.split(' ').map((letter, index) => (
+                                <div key={`${letter}-${index}`} className="flex h-10 w-8 items-center justify-center border-b-4 border-[#2c2825] text-2xl font-bold uppercase sm:h-12 sm:w-10 sm:text-3xl">
+                                  {letter}
+                                </div>
+                              ))}
                             </div>
-                          ))}
-                        </div>
-                        <p className="font-bold uppercase text-sm opacity-80">
-                          Strikes Remaining: <span className="text-xl font-black">{gameState.attemptsLeft}</span> / 6
-                        </p>
+                            <p className="text-sm font-bold uppercase opacity-80">
+                              Strikes Remaining: <span className="text-xl font-black">{gameState.attemptsLeft}</span> / 6
+                            </p>
+                          </div>
+                        )}
+
+                        {isGuesser && gameState.status === 'ongoing' && (
+                          <div className="border-t-2 border-[#2c2825] pt-6">
+                            <p className="section-label mb-4">Typewriter</p>
+                            <div className="grid grid-cols-7 justify-items-center gap-2 sm:grid-cols-9 lg:grid-cols-7 xl:grid-cols-9">
+                              {ALPHABET.map((letter) => {
+                                const correct = gameState.guesses?.includes(letter) && !gameState.wrongGuesses?.includes(letter)
+                                const wrong = gameState.wrongGuesses?.includes(letter)
+                                const isUsed = usedLetters.has(letter)
+
+                                let btnClass = 'relative h-10 w-10 overflow-hidden rounded-full border-2 border-[#2c2825] text-sm font-bold uppercase transition-all shadow-[2px_2px_0px_#2c2825] sm:h-11 sm:w-11 sm:text-base'
+
+                                if (!isUsed) {
+                                  btnClass += ' bg-[#d4c5b0] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-none'
+                                } else if (correct) {
+                                  btnClass += ' translate-x-[2px] translate-y-[2px] bg-[#2c2825] text-[#d4c5b0] shadow-none'
+                                } else if (wrong) {
+                                  btnClass += ' translate-x-[2px] translate-y-[2px] bg-[#e3d5c1] text-[#2c2825] opacity-50 shadow-none'
+                                }
+
+                                return (
+                                  <button
+                                    key={letter}
+                                    onClick={() => handleGuess(letter)}
+                                    disabled={isUsed}
+                                    className={btnClass}
+                                  >
+                                    {letter}
+                                    {wrong && <div className="pointer-events-none absolute inset-0 top-1/2 -mt-[1px] h-[2px] w-full -rotate-45 bg-[#8b0000] opacity-80"></div>}
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {gameState.status === 'won' && (
+                          <div className="border-t-4 border-dashed border-[#2c2825] pt-8 text-center">
+                            <p className="mb-2 text-3xl font-black uppercase tracking-widest text-[#10B981]">CASE SOLVED</p>
+                            {gameState.word && <p className="mb-6 text-xl font-bold uppercase">{gameState.word}</p>}
+                            <button onClick={handleRematch} className="btn-primary px-8 py-4">
+                              OPEN NEW CASE
+                            </button>
+                          </div>
+                        )}
+
+                        {gameState.status === 'lost' && (
+                          <div className="border-t-4 border-dashed border-[#2c2825] pt-8 text-center">
+                            <p className="mb-2 text-3xl font-black uppercase tracking-widest text-[#8b0000]">CASE FAILED</p>
+                            {gameState.word && <p className="mb-6 text-lg font-bold uppercase opacity-80">True Word: <span className="text-xl">{gameState.word}</span></p>}
+                            <button onClick={handleRematch} className="btn-primary px-8 py-4">
+                              RETRY CASE
+                            </button>
+                          </div>
+                        )}
                       </div>
-                    )}
-
-                    {isGuesser && gameState.status === 'ongoing' && (
-                      <div className="border-t-2 border-[#2c2825] pt-6">
-                        <p className="section-label mb-4">Typewriter</p>
-                        <div className="flex flex-wrap justify-center gap-1.5 sm:gap-2">
-                          {ALPHABET.map((letter) => {
-                            const correct = gameState.guesses?.includes(letter) && !gameState.wrongGuesses?.includes(letter)
-                            const wrong = gameState.wrongGuesses?.includes(letter)
-                            const isUsed = usedLetters.has(letter)
-
-                            let btnClass = 'h-9 w-9 rounded-full border-2 border-[#2c2825] text-base font-bold uppercase transition-all shadow-[2px_2px_0px_#2c2825] sm:h-10 sm:w-10 sm:text-lg'
-
-                            if (!isUsed) {
-                              btnClass += ' bg-[#d4c5b0] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-none'
-                            } else if (correct) {
-                              btnClass += ' bg-[#2c2825] text-[#d4c5b0] shadow-none translate-y-[2px] translate-x-[2px]'
-                            } else if (wrong) {
-                              btnClass += ' bg-[#e3d5c1] text-[#2c2825] opacity-50 shadow-none translate-y-[2px] translate-x-[2px] relative overflow-hidden'
-                            }
-
-                            return (
-                              <button
-                                key={letter}
-                                onClick={() => handleGuess(letter)}
-                                disabled={isUsed}
-                                className={btnClass}
-                              >
-                                {letter}
-                                {wrong && <div className="absolute inset-0 bg-[#8b0000] opacity-80 w-full h-[2px] top-1/2 -mt-[1px] -rotate-45 pointer-events-none"></div>}
-                              </button>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    {gameState.status === 'won' && (
-                      <div className="text-center border-t-4 border-dashed border-[#2c2825] pt-8">
-                        <p className="text-3xl font-black uppercase tracking-widest text-[#10B981] mb-2">CASE SOLVED</p>
-                        {gameState.word && <p className="text-xl font-bold uppercase mb-6">{gameState.word}</p>}
-                        <button onClick={handleRematch} className="btn-primary py-4 px-8">
-                          OPEN NEW CASE
-                        </button>
-                      </div>
-                    )}
-
-                    {gameState.status === 'lost' && (
-                      <div className="text-center border-t-4 border-dashed border-[#2c2825] pt-8">
-                        <p className="text-3xl font-black uppercase tracking-widest text-[#8b0000] mb-2">CASE FAILED</p>
-                        {gameState.word && <p className="text-lg font-bold uppercase mb-6 opacity-80">True Word: <span className="text-xl">{gameState.word}</span></p>}
-                        <button onClick={handleRematch} className="btn-primary py-4 px-8">
-                          RETRY CASE
-                        </button>
-                      </div>
-                    )}
+                    </div>
                   </div>
                 )}
               </div>
@@ -472,27 +512,27 @@ export default function MultiplayerLobby() {
 
             {roomCode && (
               <div className="border-t-2 border-dashed border-[#2c2825] pt-6">
-                <div className="mb-4 flex items-center justify-between">
-                  <div>
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
                     <p className="section-label mb-1">Field Chat</p>
-                    <p className="font-bold uppercase text-xs opacity-70">Room {roomCode}</p>
+                    <p className="truncate text-xs font-bold uppercase opacity-70">Room {roomCode}</p>
                   </div>
-                  <span className="font-bold uppercase text-xs opacity-60">
+                  <span className="shrink-0 text-xs font-bold uppercase opacity-60">
                     {chatMessages.length} message{chatMessages.length === 1 ? '' : 's'}
                   </span>
                 </div>
 
-                <div className="mb-4 max-h-64 space-y-3 overflow-y-auto border-2 border-[#2c2825] bg-[#f1e7d8] p-3">
+                <div className="mb-4 max-h-64 space-y-3 overflow-y-auto border-2 border-[#2c2825] bg-[#f1e7d8] p-3 sm:max-h-72">
                   {chatMessages.length === 0 ? (
-                    <p className="font-bold uppercase text-xs opacity-60">No messages yet.</p>
+                    <p className="text-xs font-bold uppercase opacity-60">No messages yet.</p>
                   ) : (
                     chatMessages.map((message, index) => (
                       <div key={`${message.senderNickname}-${message.createdAt || index}-${index}`} className="border-l-4 border-[#2c2825] pl-3">
                         <div className="flex items-center justify-between gap-2">
-                          <p className="font-black uppercase text-sm">{message.senderNickname}</p>
-                          <span className="text-[10px] font-bold uppercase opacity-50">{message.senderRole}</span>
+                          <p className="min-w-0 truncate text-sm font-black uppercase">{message.senderNickname}</p>
+                          <span className="shrink-0 text-[10px] font-bold uppercase opacity-50">{message.senderRole}</span>
                         </div>
-                        <p className="text-sm font-bold">{message.message}</p>
+                        <p className="break-words text-sm font-bold">{message.message}</p>
                       </div>
                     ))
                   )}
@@ -507,7 +547,7 @@ export default function MultiplayerLobby() {
                     }}
                     placeholder="SEND A MESSAGE"
                     maxLength={240}
-                    className="glass-input flex-1 uppercase"
+                    className="glass-input flex-1 text-base uppercase sm:text-lg"
                   />
                   <button onClick={handleSendChat} className="btn-primary px-5 py-3 sm:self-end">
                     SEND
@@ -515,7 +555,8 @@ export default function MultiplayerLobby() {
                 </div>
               </div>
             )}
-          </section>
+            </section>
+          </div>
         </div>
       </div>
     </div>

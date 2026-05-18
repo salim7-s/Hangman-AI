@@ -1,7 +1,9 @@
 const mongoose = require('mongoose')
+const jwt = require('jsonwebtoken')
 
 const memRooms = {}
 let RoomModel = null
+let UserModel = null
 
 function isMongoConnected() {
   return mongoose.connection.readyState === 1
@@ -12,6 +14,13 @@ function getRoomModel() {
     RoomModel = require('../models/MultiplayerRoom')
   }
   return RoomModel
+}
+
+function getUserModel() {
+  if (!UserModel && isMongoConnected()) {
+    UserModel = require('../models/User')
+  }
+  return UserModel
 }
 
 function generateCode() {
@@ -101,6 +110,38 @@ function sanitize(room) {
   }
 }
 
+async function resolveSocketUser(socket) {
+  const token = socket.handshake.auth?.token
+  if (!token || !process.env.JWT_SECRET || !isMongoConnected()) return null
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET)
+    const User = getUserModel()
+    if (!User) return null
+    return User.findById(decoded.id).select('_id username')
+  } catch {
+    return null
+  }
+}
+
+async function incrementParticipantStats(participant, won) {
+  if (!participant) return
+
+  const User = getUserModel()
+  if (!User) return
+
+  const inc = { gamesPlayed: 1, [won ? 'wins' : 'losses']: 1 }
+
+  if (participant.userId) {
+    await User.findByIdAndUpdate(participant.userId, { $inc: inc })
+    return
+  }
+
+  if (participant.nickname) {
+    await User.findOneAndUpdate({ username: participant.nickname }, { $inc: inc })
+  }
+}
+
 function resolveLobbyScreen(role, status) {
   if (status === 'waiting' && role === 'word-giver') return 'create'
   if (status === 'word-entry' && role === 'word-giver') return 'word-entry'
@@ -110,9 +151,12 @@ function resolveLobbyScreen(role, status) {
 module.exports = function setupSocket(io) {
   io.on('connection', (socket) => {
     console.log(`Socket connected: ${socket.id}`)
+    socket.data.user = null
 
     socket.on('create-room', async ({ nickname }) => {
       try {
+        const currentUser = socket.data.user || await resolveSocketUser(socket)
+        socket.data.user = currentUser || null
         const cleanNickname = (nickname || '').trim()
         if (!/^[A-Z0-9 ]{2,20}$/i.test(cleanNickname)) {
           return socket.emit('error', { message: 'Nickname must be 2-20 letters or numbers' })
@@ -123,6 +167,7 @@ module.exports = function setupSocket(io) {
           code,
           wordGiver: {
             socketId: socket.id,
+            userId: currentUser?._id || null,
             nickname: cleanNickname,
             connected: true,
             lastSeenAt: new Date(),
@@ -152,6 +197,8 @@ module.exports = function setupSocket(io) {
 
     socket.on('join-room', async ({ code, nickname }) => {
       try {
+        const currentUser = socket.data.user || await resolveSocketUser(socket)
+        socket.data.user = currentUser || null
         const cleanCode = (code || '').trim().toUpperCase()
         const cleanNickname = (nickname || '').trim()
         if (!cleanCode) return socket.emit('error', { message: 'Room code is required' })
@@ -167,17 +214,20 @@ module.exports = function setupSocket(io) {
 
         if (room.wordGiver && !room.wordGiver.connected && room.wordGiver.nickname === cleanNickname) {
           room.wordGiver.socketId = socket.id
+          room.wordGiver.userId = room.wordGiver.userId || currentUser?._id || null
           room.wordGiver.connected = true
           room.wordGiver.lastSeenAt = new Date()
           role = 'word-giver'
         } else if (room.guesser && !room.guesser.connected && room.guesser.nickname === cleanNickname) {
           room.guesser.socketId = socket.id
+          room.guesser.userId = room.guesser.userId || currentUser?._id || null
           room.guesser.connected = true
           room.guesser.lastSeenAt = new Date()
           role = 'guesser'
         } else if (!room.guesser && room.status === 'waiting') {
           room.guesser = {
             socketId: socket.id,
+            userId: currentUser?._id || null,
             nickname: cleanNickname,
             connected: true,
             lastSeenAt: new Date(),
@@ -280,6 +330,17 @@ module.exports = function setupSocket(io) {
         }
 
         await saveRoom(room)
+
+        // ── Track stats in User model when game ends ──────────────────────
+        if (room.status !== 'ongoing' && isMongoConnected()) {
+          try {
+            const guesserWon = room.status === 'won'
+            await incrementParticipantStats(room.guesser, guesserWon)
+            await incrementParticipantStats(room.wordGiver, !guesserWon)
+          } catch (statErr) {
+            console.error('Failed to update user stats:', statErr.message)
+          }
+        }
 
         const state = sanitize(room)
         if (room.status !== 'ongoing') state.word = room.word

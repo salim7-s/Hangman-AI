@@ -4,14 +4,16 @@ import { getApiBaseUrl } from '../services/runtimeConfig'
 
 let socketInstance = null
 
-function getSocket() {
+function getSocket(token = localStorage.getItem('hangman_token')) {
   if (!socketInstance || socketInstance.disconnected) {
     socketInstance = io(getApiBaseUrl(), {
+      auth: { token },
       transports: ['websocket', 'polling'],
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
     })
   }
+
   return socketInstance
 }
 
@@ -19,9 +21,24 @@ export function useSocket() {
   const socketRef = useRef(null)
 
   useEffect(() => {
-    socketRef.current = getSocket()
+    const token = localStorage.getItem('hangman_token')
+
+    if (socketInstance) {
+      socketInstance.auth = { token }
+
+      if (socketInstance.connected) {
+        socketInstance.disconnect()
+      }
+    }
+
+    socketRef.current = getSocket(token)
+
+    if (!socketRef.current.connected) {
+      socketRef.current.connect()
+    }
+
     return () => {
-      // Do NOT disconnect on unmount — shared singleton keeps connection alive
+      // Shared singleton keeps the connection alive across route changes.
     }
   }, [])
 

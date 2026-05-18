@@ -1,113 +1,129 @@
-# 🎮 AI Hangman
+{
+  "name": "my-project",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "concurrently \"cd backend && npm start\" \"cd frontend && npm start\"",
+    // other scripts...
+  },
+  "dependencies": {
+    // your dependencies...
+  }
+}# Hangman AI
 
-A full-stack MERN Hangman game with three play modes, a real-time multiplayer lobby, and a 3D animated character board.
+Hangman AI is a full-stack word game built with React, Node.js, Express, Socket.IO, and optional MongoDB persistence. The project includes solo play, local pass-and-play, real-time multiplayer rooms, and an AI guesser with easy, medium, and entropy-driven hard modes.
 
-| Feature | Stack |
-|---------|-------|
-| Frontend | React 19 + Vite + TailwindCSS v4 |
-| 3D Scene | Three.js + React Three Fiber |
-| Backend  | Node.js + Express + Socket.io |
-| Database | MongoDB Atlas (free tier) |
-| Deploy   | Vercel (frontend) + Render (backend) |
+## Stack
 
----
+- Frontend: React 19, Vite, Tailwind CSS, Three.js, React Three Fiber
+- Backend: Node.js, Express, Socket.IO
+- Persistence: MongoDB Atlas when `MONGO_URI` is configured, in-memory fallback otherwise
+- Deployment targets: Vercel for frontend, Render for backend
 
-## 🕹️ Game Modes
+## Core Features
 
-- **Guess Against AI** — AI picks a word; you solve it in 6 attempts
-- **Watch AI Guess** — You set the word; AI tries to crack it using frequency analysis
-- **Local Duel** — Pass-and-play on the same device
-- **Multiplayer Lobby** — Real-time socket rooms with role-swapping rematch
+- AI-vs-player mode where the system selects a word for the player
+- Player-vs-AI mode where the AI solves a hidden word using heuristic and entropy strategies
+- Local two-player mode on one device
+- Real-time multiplayer rooms with role swapping on rematch
+- JWT-based auth and leaderboard support when MongoDB is available
+- 3D hangman scene rendered in the browser
 
----
+## Engineering Upgrades
 
-## 🚀 Deployment
+The repo now includes quality and evaluation infrastructure that makes the project easier to defend in interviews:
 
-The full deployment instructions for MongoDB, Render (Backend), and Vercel (Frontend) are located in the [docs/deployment_guide.md](docs/deployment_guide.md) file. This guide provides a step-by-step, free-tier deployment strategy.
+- backend regression tests for the AI engine and core game controller flows
+- a reproducible AI benchmark script using the production dictionary
+- dictionary indexing by word length to avoid full-corpus scans on every guess
+- a separate curated gameplay dictionary so players do not see raw corpus junk
+- GitHub Actions CI for backend tests plus frontend lint and build checks
 
----
+## AI Benchmark Snapshot
 
-## 💻 Local Development
+Latest local run on 2026-05-18 using `SAMPLE_SIZE=25`:
 
-### Prerequisites
-- Node.js ≥ 18
-- (Optional) MongoDB URI — works without it in-memory mode
+| Difficulty | Games | Win Rate | Avg Turns | Avg Wrong Guesses | Avg Latency |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Easy | 25 | 68.0% | 8.20 | 4.32 | 6.12 ms |
+| Medium | 25 | 84.0% | 8.04 | 2.76 | 27.92 ms |
+| Hard | 25 | 100.0% | 9.24 | 1.80 | 138.97 ms |
+
+Full methodology and results live in [docs/ai_benchmark.md](docs/ai_benchmark.md).
+
+## Local Development
 
 ### Backend
+
 ```bash
 cd backend
-cp .env.example .env
-# Edit .env — add MONGO_URI if you want persistence
 npm install
 npm run dev
-# → http://localhost:5000
 ```
+
+Environment variables:
+
+- `PORT` optional, defaults to `5000`
+- `CLIENT_URL` required for cross-origin frontend access in production
+- `MONGO_URI` optional, enables persistence and auth-backed stats
+- `JWT_SECRET` required if auth endpoints are used
+- `JWT_EXPIRES_IN` optional, defaults to `7d`
 
 ### Frontend
+
 ```bash
 cd frontend
-# .env already has VITE_API_URL=http://localhost:5000 for local dev
 npm install
 npm run dev
-# → http://localhost:5173
 ```
 
----
+Use `VITE_API_URL=http://localhost:5000` for local backend integration.
 
-## 📁 Project Structure
+## Quality Commands
 
-```
-hangman-ai/
-├── backend/
-│   ├── config/        # MongoDB connection
-│   ├── controllers/   # gameController, authController
-│   ├── middleware/    # JWT auth middleware
-│   ├── models/        # Mongoose User & Game models
-│   ├── routes/        # /api/game, /api/auth
-│   ├── services/      # AI frequency-analysis engine
-│   ├── socket/        # Socket.io multiplayer rooms
-│   ├── server.js      # Entry point
-│   └── .env.example   # Environment variable template
-├── frontend/
-│   ├── src/
-│   │   ├── components/  # HangmanScene, Keyboard, ResultModal
-│   │   ├── hooks/       # useStreak, useSounds, useSocket
-│   │   ├── pages/       # Home, Game, MultiplayerLobby
-│   │   └── services/    # axios API client, runtimeConfig
-│   ├── vercel.json    # SPA fallback rewrites
-│   └── .env           # Local dev env (VITE_API_URL)
-└── words_250000_train.txt  # AI dictionary (2.35MB)
+Backend:
+
+```bash
+cd backend
+npm test
+npm run benchmark:ai
+npm run words:build
 ```
 
----
+`npm run words:build` regenerates `backend/data/words_game_curated.txt` from the raw corpus using the current gameplay filters and blocklist.
 
-## 🤖 AI Algorithm
+Frontend:
 
-The AI guesser (`backend/services/aiService.js`) implements a **Multi-Tiered Intelligence Engine**:
+```bash
+cd frontend
+npm run lint
+npm run build
+```
 
-1. **Rookie (Easy):** Uses raw letter frequency to guess like a human beginner.
-2. **Detective (Medium):** Uses a heuristic balancing frequency, positional probability, and elimination power.
-3. **Chief (Hard):** Uses a mathematically perfect **Shannon Entropy** algorithm. It calculates the exact expected information gain (in bits) for every available letter, guaranteeing the absolute fastest path to isolating the target word within the 250,000-word dictionary.
+## Project Structure
 
-All brains gracefully fall back to standard English letter frequency order (`E,T,A,O…`) when no dictionary candidates remain.
+```text
+backend/
+  config/        Database connection
+  controllers/   REST game and auth handlers
+  data/          Curated gameplay dictionary and word blocklist
+  middleware/    JWT auth middleware
+  models/        Mongoose models
+  routes/        API routes
+  scripts/       Benchmark and evaluation scripts
+  services/      AI word-selection and guessing logic
+  socket/        Real-time multiplayer room logic
+  test/          Backend regression tests
+frontend/
+  src/components/  UI and 3D scene components
+  src/hooks/       Reusable game and socket hooks
+  src/pages/       Route-level screens
+docs/             Architecture, deployment, API, and benchmark docs
+```
 
----
+## Documentation
 
-## 🔐 Environment Variables Reference
-
-### Backend (`backend/.env`)
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `PORT` | No | Server port (default: 5000) |
-| `MONGO_URI` | No* | MongoDB Atlas connection string |
-| `JWT_SECRET` | Yes (auth) | Random secret for JWT signing |
-| `JWT_EXPIRES_IN` | No | Token lifespan (default: 7d) |
-| `CLIENT_URL` | Yes | Frontend URL for CORS |
-| `NODE_ENV` | No | `development` or `production` |
-
-*Without `MONGO_URI`, the app runs in-memory (stats don't persist)
-
-### Frontend (`frontend/.env`)
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `VITE_API_URL` | Yes (prod) | Backend URL (e.g., Render URL) |
+- [docs/README.md](docs/README.md)
+- [docs/architecture_overview.md](docs/architecture_overview.md)
+- [docs/api_reference.md](docs/api_reference.md)
+- [docs/socket_multiplayer.md](docs/socket_multiplayer.md)
+- [docs/ai_benchmark.md](docs/ai_benchmark.md)

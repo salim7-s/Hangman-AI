@@ -1,16 +1,87 @@
-# React + Vite
+# Frontend Documentation
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+This frontend is a React 19 + Vite application for the Hangman AI project.
 
-Currently, two official plugins are available:
+## Responsibilities
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+The frontend handles:
 
-## React Compiler
+- Mode selection and routing
+- Game board rendering
+- Keyboard input
+- Multiplayer lobby interactions
+- 3D character and scene rendering
+- Auth state persistence in the client
+- API and socket communication with the backend
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Main Folders
 
-## Expanding the ESLint configuration
+| Path | Purpose |
+| --- | --- |
+| `src/pages/` | Route-level screens such as `Home`, `Game`, and `MultiplayerLobby` |
+| `src/components/` | Reusable UI and scene components |
+| `src/hooks/` | Custom hooks for socket, sound, and streak logic |
+| `src/context/` | Authentication state and provider logic |
+| `src/services/` | API client and runtime configuration helpers |
+| `public/` | Static assets such as SVG icons and favicon |
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Run Locally
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Default dev URL:
+
+- `http://localhost:5173`
+
+## Environment Variable
+
+Create `frontend/.env`:
+
+```env
+VITE_API_URL=http://localhost:5000
+```
+
+This value should point to the backend base URL.
+
+## Scripts
+
+- `npm run dev`: start Vite dev server
+- `npm run build`: create production build
+- `npm run preview`: preview built output locally
+- `npm run lint`: run ESLint
+
+## Important Pages
+
+### `src/pages/Home.jsx`
+
+- Entry page for selecting game modes and app navigation
+
+### `src/pages/Game.jsx`
+
+- Main single-player and local-duel gameplay page
+- Talks to REST endpoints in the backend
+
+### `src/pages/MultiplayerLobby.jsx`
+
+- Handles room creation, join flow, and real-time multiplayer state
+- Uses Socket.io events instead of the REST game routes
+
+## Related Backend Areas
+
+When working on frontend gameplay, the backend files most likely involved are:
+
+- `backend/routes/gameRoutes.js`
+- `backend/controllers/gameController.js`
+- `backend/socket/gameSocket.js`
+
+## More Documentation
+
+For broader project documentation, see:
+
+- [`../docs/README.md`](../docs/README.md)
+- [`../docs/local_development.md`](../docs/local_development.md)
+- [`../docs/socket_multiplayer.md`](../docs/socket_multiplayer.md)
