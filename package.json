@@ -1,5 +1,6 @@
 {
   "name": "hangman-ai",
+  "description": "Full-stack Hangman game with React, Node.js, multiplayer rooms, and AI guessing modes.",
   "private": true,
   "version": "1.0.0",
   "engines": {

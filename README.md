@@ -1,16 +1,15 @@
-{
-  "name": "my-project",
-  "version": "1.0.0",
-  "scripts": {
-    "start": "concurrently \"cd backend && npm start\" \"cd frontend && npm start\"",
-    // other scripts...
-  },
-  "dependencies": {
-    // your dependencies...
-  }
-}# Hangman AI
+# Hangman AI
 
 Hangman AI is a full-stack word game built with React, Node.js, Express, Socket.IO, and optional MongoDB persistence. The project includes solo play, local pass-and-play, real-time multiplayer rooms, and an AI guesser with easy, medium, and entropy-driven hard modes.
+
+Modern full-stack Hangman with real-time multiplayer, a three-difficulty AI solver, and a React + Node.js deployment path that is easy to demo on GitHub.
+
+## Quick Links
+
+- [Project documentation](./docs/README.md)
+- [Local development guide](./docs/local_development.md)
+- [Deployment guide](./docs/deployment_guide.md)
+- [AI benchmark details](./docs/ai_benchmark.md)
 
 ## Stack
 
@@ -48,7 +47,7 @@ Latest local run on 2026-05-18 using `SAMPLE_SIZE=25`:
 | Medium | 25 | 84.0% | 8.04 | 2.76 | 27.92 ms |
 | Hard | 25 | 100.0% | 9.24 | 1.80 | 138.97 ms |
 
-Full methodology and results live in [docs/ai_benchmark.md](docs/ai_benchmark.md).
+Full methodology and results live in [docs/ai_benchmark.md](./docs/ai_benchmark.md).
 
 ## Local Development
 
@@ -122,8 +121,8 @@ docs/             Architecture, deployment, API, and benchmark docs
 
 ## Documentation
 
-- [docs/README.md](docs/README.md)
-- [docs/architecture_overview.md](docs/architecture_overview.md)
-- [docs/api_reference.md](docs/api_reference.md)
-- [docs/socket_multiplayer.md](docs/socket_multiplayer.md)
-- [docs/ai_benchmark.md](docs/ai_benchmark.md)
+- [docs/README.md](./docs/README.md)
+- [docs/architecture_overview.md](./docs/architecture_overview.md)
+- [docs/api_reference.md](./docs/api_reference.md)
+- [docs/socket_multiplayer.md](./docs/socket_multiplayer.md)
+- [docs/ai_benchmark.md](./docs/ai_benchmark.md)

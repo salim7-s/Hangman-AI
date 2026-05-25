@@ -1,5 +1,6 @@
 {
   "name": "hangman-backend",
+  "description": "Express and Socket.IO backend for the Hangman AI game, including multiplayer and AI gameplay logic.",
   "version": "1.0.0",
   "type": "commonjs",
   "engines": { "node": ">=18" },
