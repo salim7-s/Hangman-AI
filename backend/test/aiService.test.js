@@ -7,6 +7,9 @@ const {
   getDictionaryStats,
   __setDictionaryForTests,
   __resetDictionaryForTests,
+  __setLearningForTests,
+  __resetLearningForTests,
+  recordLoss,
 } = require('../services/aiService')
 
 module.exports = [
@@ -137,6 +140,28 @@ module.exports = [
       assert.equal(explanation.topCandidates[0], 'PLANET')
       assert.equal(explanation.nextGuess, 'T')
       assert.equal(explanation.strategy, 'Candidate Letter Frequency')
+    },
+  },
+  {
+    name: 'persistent learning loop registers loss and deprioritizes penalised letters',
+    async run() {
+      __resetDictionaryForTests()
+      __resetLearningForTests()
+      __setDictionaryForTests(['AURA', 'AGRA'])
+
+      // Without penalty, 'A' is present in 100% of candidates (4/4 locations total) and should be picked first
+      const resBefore = await aiGuess('_ _ _ _', [], [], 'hard')
+      assert.equal(resBefore.letter, 'A')
+
+      // Record a loss where 'A' was wasted (wrong letter) for 4-letter words
+      recordLoss(4, ['A'])
+
+      // Now, guessing on a new game should penalise 'A' and pick 'R' instead (present in both candidates)
+      const resAfter = await aiGuess('_ _ _ _', [], [], 'hard')
+      assert.notEqual(resAfter.letter, 'A')
+      assert.equal(resAfter.letter, 'R')
+
+      __resetLearningForTests()
     },
   },
 ]
