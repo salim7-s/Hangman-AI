@@ -1,33 +1,56 @@
 # Hangman AI
 
-Hangman AI is a full-stack word game built with React, Node.js, Express, Socket.IO, and optional MongoDB persistence. The project includes solo play, local pass-and-play, real-time multiplayer rooms, and an AI guesser with easy, medium, and entropy-driven hard modes.
+Hangman AI is a full-stack, real-time word game built with React, Node.js, Express, Socket.IO, and optional MongoDB persistence. The project includes solo play, local pass-and-play, real-time multiplayer rooms, and an AI guesser with Rookie, Detective, and Chief difficulty modes.
 
-Modern full-stack Hangman with real-time multiplayer, a three-difficulty AI solver, and a React + Node.js deployment path that is easy to demo on GitHub.
+## System Architecture
 
-## Quick Links
+```mermaid
+graph TD
+    subgraph Frontend [React SPA Client]
+        UI[React UI / Game State]
+        ThreeJS[Three.js 3D Hangman Scene]
+        SocketClient[Socket.IO Client]
+    end
 
-- [Project documentation](./docs/README.md)
-- [Local development guide](./docs/local_development.md)
-- [Deployment guide](./docs/deployment_guide.md)
-- [AI benchmark details](./docs/ai_benchmark.md)
+    subgraph Backend [Express Server]
+        API[Express REST API]
+        SocketServer[Socket.IO Server]
+        AISolver[AI Guessing Service]
+        Learning[Persistent Learning Layer]
+    end
 
-## Stack
+    subgraph External [External Services & DB]
+        Datamuse[Datamuse API]
+        Mongo[MongoDB Atlas]
+    end
 
-- Frontend: React 19, Vite, Tailwind CSS, Three.js, React Three Fiber
-- Backend: Node.js, Express, Socket.IO
-- Persistence: MongoDB Atlas when `MONGO_URI` is configured, in-memory fallback otherwise
-- Deployment targets: Vercel for frontend, Render for backend
+    UI -->|REST Requests| API
+    UI --> ThreeJS
+    SocketClient <-->|WebSockets| SocketServer
+    API -->|Fetch Solves| AISolver
+    AISolver -->|Parallel Fallback| Datamuse
+    AISolver -->|Apply Penalties| Learning
+    API -->|Optional Auth/Leaderboards| Mongo
+```
 
 ## Core Features
 
-- AI-vs-player mode where the system selects a word for the player
-- Player-vs-AI mode where the AI solves a hidden word using heuristic and entropy strategies
-- Web-Assisted Fallback (via Datamuse API) to allow the AI to guess proper nouns, slang, or out-of-dictionary words rather than failing silently
-- Interactive AI Reasoning Explainer UI that displays live entropy calculations and possibilities
-- Local two-player mode on one device
-- Real-time multiplayer rooms with role swapping on rematch
-- JWT-based auth and leaderboard support when MongoDB is available
-- 3D hangman scene rendered in the browser
+- **AI-vs-Player Mode:** The server picks target words for the player.
+- **Player-vs-AI Mode:** The AI acts as the investigator, guessing your word.
+- **Persistent AI Learning Loop:** After each loss, the AI records wasted letters to a local JSON feedback store, applying decay-weighted penalties in future sessions to dynamically adapt its strategy.
+- **Web-Assisted Parallel Fallback:** Resolves slang, names, and out-of-dictionary terms by query-matching local indexes and the Datamuse API concurrently.
+- **AI Explainer Dashboard:** Interactive live UI reflecting candidate-pools, heuristics, and individual letter score calculations.
+- **Real-Time Multiplayer:** Matchmaking lobby via Socket.IO, complete with state replication and room role-swaps.
+- **JWT Auth & Persistence:** Mongoose-backed authorization flow with transparent fallback to in-memory tables if database configuration is omitted.
+
+## Persistent Learning Loop Details
+
+The AI has a self-improving feedback loop built into its guessing service:
+1. **Wrong Guess Analysis:** When the AI loses a game, it isolates all of its wrong guesses (wasted turns).
+2. **Keyed Learning Store:** It records these failures to `ai_learning.json` categorized by word length.
+3. **Decay Penalization:** On future runs, letters with high penalty values are scaled down in priority (up to a max of 40% reduction).
+4. **Temporal Decay:** Each game played decays existing penalties by 5% so the AI adapts without permanent bias.
+
 
 ## Engineering Upgrades
 
