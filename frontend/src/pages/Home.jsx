@@ -103,11 +103,11 @@ export default function Home() {
       <div className="flex flex-1 items-center justify-center p-3 sm:p-8">
         {view === 'landing' && (
           <div className="z-10 flex flex-col items-center justify-center text-center fade-in-up w-full">
-            <div className="glass-panel flex w-full max-w-[700px] md:max-w-[900px] lg:max-w-[1100px] xl:max-w-[1300px] flex-col items-center bg-[#e3d5c1] p-6 sm:p-16 lg:p-20 sm:rotate-[-1deg]">
+            <div className="glass-panel flex w-full max-w-[92vw] md:max-w-[85vw] lg:max-w-[80vw] xl:max-w-[1400px] flex-col items-center bg-[#e3d5c1] p-6 sm:p-16 lg:p-24 sm:rotate-[-1deg]">
               <div className="mb-6 flex w-full flex-col gap-4 border-b-4 border-dashed border-[#2c2825] pb-5 text-left sm:mb-8 sm:flex-row sm:items-start sm:justify-between sm:pb-6">
                 <div className="min-w-0">
-                  <p className="mb-1 text-xs font-bold uppercase tracking-[0.18em] opacity-70 sm:text-sm lg:text-base">Department of Investigation</p>
-                  <h1 className="text-4xl font-black leading-none uppercase tracking-[0.12em] sm:text-7xl lg:text-8xl sm:tracking-widest">
+                  <p className="mb-1 text-xs font-bold uppercase tracking-[0.18em] opacity-70 sm:text-sm lg:text-lg">Department of Investigation</p>
+                  <h1 className="text-4xl font-black leading-none uppercase tracking-[0.12em] sm:text-7xl lg:text-9xl xl:text-[10rem] sm:tracking-widest">
                     AI HANGMAN
                   </h1>
                 </div>
@@ -116,7 +116,7 @@ export default function Home() {
                 </div>
               </div>
 
-              <p className="mb-8 max-w-xl lg:max-w-2xl text-sm font-bold uppercase tracking-[0.12em] opacity-80 sm:mb-12 sm:text-lg lg:text-xl sm:tracking-widest">
+              <p className="mb-8 max-w-2xl lg:max-w-4xl text-sm font-bold uppercase tracking-[0.12em] opacity-80 sm:mb-12 sm:text-lg lg:text-2xl sm:tracking-widest">
                 You have been assigned to Case File #404. Review the evidence carefully. One wrong guess and the suspect walks.
               </p>
 
@@ -130,13 +130,13 @@ export default function Home() {
               <div className="flex w-full flex-col items-stretch justify-center gap-4 sm:flex-row sm:items-center sm:gap-6">
                 <button
                   onClick={() => setView('setup')}
-                  className="btn-primary w-full px-6 py-4 text-base sm:min-w-[240px] lg:min-w-[300px] sm:px-12 lg:py-5 sm:text-xl lg:text-2xl"
+                  className="btn-primary w-full px-6 py-4 text-base sm:min-w-[240px] lg:min-w-[360px] sm:px-12 lg:py-6 sm:text-xl lg:text-3xl"
                 >
                   OPEN CASE FILE
                 </button>
                 <button
                   onClick={() => navigate('/multiplayer')}
-                  className="btn-primary w-full px-6 py-4 text-base sm:min-w-[240px] lg:min-w-[300px] sm:px-12 lg:py-5 sm:text-xl lg:text-2xl"
+                  className="btn-primary w-full px-6 py-4 text-base sm:min-w-[240px] lg:min-w-[360px] sm:px-12 lg:py-6 sm:text-xl lg:text-3xl"
                 >
                   MULTIPLAYER LOBBY
                 </button>
@@ -150,7 +150,7 @@ export default function Home() {
         )}
 
         {view === 'setup' && (
-          <div className="z-10 w-full max-w-[650px] md:max-w-[850px] lg:max-w-[1050px] xl:max-w-[1250px] px-1 fade-in-up sm:px-2">
+          <div className="z-10 w-full max-w-[92vw] md:max-w-[85vw] lg:max-w-[80vw] xl:max-w-[1400px] px-1 fade-in-up sm:px-2">
             <button
               onClick={() => setView('landing')}
               className="text-[#2c2825] hover:opacity-70 text-sm font-bold flex items-center gap-2 mb-4 uppercase tracking-widest transition-opacity"
