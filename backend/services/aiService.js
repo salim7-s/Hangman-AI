@@ -288,11 +288,28 @@ function getDictionaryStats() {
   }
 }
 
-function aiGuessEasy(candidates, guessedSet, fallbackLetters) {
+function aiGuessEasy(candidates, guessedSet, fallbackLetters, wordLen) {
   // Easy: use global English letter frequency, ignore candidates.
   // This makes it feel casual — the AI doesn't "think hard".
+  // Apply learning penalty to the frequency values to deprioritize consistently failed letters.
   const ENGLISH_FREQ = ['E','T','A','O','I','N','S','R','H','L','D','C','U','M','F','P','G','W','Y','B','V','K','X','J','Q','Z']
-  return ENGLISH_FREQ.find(l => !guessedSet.has(l)) || fallbackLetters.find(l => !guessedSet.has(l)) || 'E'
+  
+  let bestLetter = null
+  let bestScore = -1
+  
+  for (let i = 0; i < ENGLISH_FREQ.length; i++) {
+    const letter = ENGLISH_FREQ[i]
+    if (guessedSet.has(letter)) continue
+    
+    const indexScore = 26 - i
+    const score = indexScore * getLearningPenalty(letter, wordLen)
+    if (score > bestScore) {
+      bestScore = score
+      bestLetter = letter
+    }
+  }
+  
+  return bestLetter || fallbackLetters.find(l => !guessedSet.has(l)) || 'E'
 }
 
 // ── MEDIUM: candidate letter frequency + learning ────────────────────────────
@@ -470,7 +487,7 @@ async function aiGuess(pattern, wrongLetters, guessedLetters, difficulty = 'medi
   let letter = 'E'
 
   if (difficulty === 'easy') {
-    letter = aiGuessEasy(effectiveCandidates, guessedSet, fallbackLetters)
+    letter = aiGuessEasy(effectiveCandidates, guessedSet, fallbackLetters, wordLen)
   } else if (difficulty === 'hard') {
     letter = aiGuessHard(effectiveCandidates, wordLen, guessedSet, fallbackLetters)
   } else {
