@@ -244,12 +244,29 @@ function getDictionaryStats() {
 }
 
 function aiGuessEasy(candidates, guessedSet, fallbackLetters) {
+  // Easy: use global English letter frequency, ignore candidates.
+  // This makes it feel casual — the AI doesn't "think hard".
+  const ENGLISH_FREQ = ['E','T','A','O','I','N','S','R','H','L','D','C','U','M','F','P','G','W','Y','B','V','K','X','J','Q','Z']
+  return ENGLISH_FREQ.find(l => !guessedSet.has(l)) || fallbackLetters.find(l => !guessedSet.has(l)) || 'E'
+}
+
+// ── MEDIUM: candidate letter frequency ───────────────────────────────────────
+// The industry-standard approach. For each unguessed letter, count how many
+// candidate words contain it. Pick the letter appearing in the most words.
+// This is statistically optimal for maximising the probability of a correct guess.
+function aiGuessMedium(candidates, patternChars, wordLen, guessedSet, fallbackLetters) {
   if (candidates.length === 0) {
-    return fallbackLetters.find((letter) => !guessedSet.has(letter)) || 'E'
+    return fallbackLetters.find(l => !guessedSet.has(l)) || 'E'
+  }
+
+  // If only 1 candidate left, spell it out
+  if (candidates.length === 1) {
+    for (const char of candidates[0]) {
+      if (!guessedSet.has(char)) return char
+    }
   }
 
   const frequency = {}
-
   for (const word of candidates) {
     const seen = new Set()
     for (const char of word) {
@@ -261,123 +278,68 @@ function aiGuessEasy(candidates, guessedSet, fallbackLetters) {
   }
 
   let bestLetter = null
-  let bestScore = -1
-
+  let bestScore  = -1
   for (const [letter, count] of Object.entries(frequency)) {
-    const score = count * (0.9 + Math.random() * 0.2)
-    if (score > bestScore) {
-      bestScore = score
-      bestLetter = letter
-    }
+    if (count > bestScore) { bestScore = count; bestLetter = letter }
   }
 
-  return bestLetter || fallbackLetters.find((letter) => !guessedSet.has(letter)) || 'E'
+  return bestLetter || fallbackLetters.find(l => !guessedSet.has(l)) || 'E'
 }
 
-function aiGuessMedium(candidates, patternChars, wordLen, guessedSet, fallbackLetters) {
-  const candidateCount = candidates.length
-  if (candidateCount === 0) {
-    return fallbackLetters.find((letter) => !guessedSet.has(letter)) || 'E'
-  }
-
-  const frequency = {}
-  const positionalFrequency = Array.from({ length: wordLen }, () => ({}))
-
-  for (const word of candidates) {
-    const seen = new Set()
-
-    for (let index = 0; index < word.length; index++) {
-      const char = word[index]
-      if (guessedSet.has(char)) continue
-
-      if (!seen.has(char)) {
-        frequency[char] = (frequency[char] || 0) + 1
-        seen.add(char)
-      }
-
-      if (patternChars[index] === '_') {
-        positionalFrequency[index][char] = (positionalFrequency[index][char] || 0) + 1
-      }
-    }
-  }
-
-  let bestLetter = null
-  let bestScore = -1
-
-  for (const [letter, count] of Object.entries(frequency)) {
-    if (guessedSet.has(letter)) continue
-
-    const normalizedFrequency = count / candidateCount
-    const wordsContainingLetter = candidates.filter((word) => word.includes(letter)).length
-    const eliminationPower = wordsContainingLetter / candidateCount
-
-    let positionalSum = 0
-    let blankCount = 0
-
-    for (let index = 0; index < wordLen; index++) {
-      if (patternChars[index] === '_') {
-        positionalSum += (positionalFrequency[index][letter] || 0) / candidateCount
-        blankCount++
-      }
-    }
-
-    const positionalProbability = blankCount > 0 ? positionalSum / blankCount : 0
-    const score =
-      0.5 * normalizedFrequency +
-      0.3 * positionalProbability +
-      0.2 * eliminationPower
-
-    if (score > bestScore) {
-      bestScore = score
-      bestLetter = letter
-    }
-  }
-
-  return bestLetter || fallbackLetters.find((letter) => !guessedSet.has(letter)) || 'E'
-}
-
+// ── HARD: entropy-based scoring ──────────────────────────────────────────────
+// Picks the letter that best SPLITS the candidate pool.
+// Entropy = -p*log2(p) - (1-p)*log2(1-p), maximised at p=0.5.
+// A letter in exactly 50% of candidates gives maximum information per guess.
+// When the candidate pool is very small (≤ 3), switches back to pure frequency
+// to just directly guess the answer rather than splitting further.
 function aiGuessHard(candidates, wordLen, guessedSet, fallbackLetters) {
-  const candidateCount = candidates.length
-  if (candidateCount === 0) {
-    return fallbackLetters.find((letter) => !guessedSet.has(letter)) || 'E'
-  }
-
-  if (candidateCount === 1) {
+  const n = candidates.length
+  if (n === 0) return fallbackLetters.find(l => !guessedSet.has(l)) || 'E'
+  if (n === 1) {
     for (const char of candidates[0]) {
       if (!guessedSet.has(char)) return char
     }
   }
 
-  const possibleLetters = new Set()
-  const frequency = {}
+  // Count how many candidates contain each letter
+  const hitCount = {}
   for (const word of candidates) {
     const seen = new Set()
     for (const char of word) {
-      if (guessedSet.has(char)) continue
-      possibleLetters.add(char)
-      if (!seen.has(char)) {
-        frequency[char] = (frequency[char] || 0) + 1
+      if (!guessedSet.has(char) && !seen.has(char)) {
+        hitCount[char] = (hitCount[char] || 0) + 1
         seen.add(char)
       }
     }
   }
 
-  if (possibleLetters.size === 0) {
-    return fallbackLetters.find((letter) => !guessedSet.has(letter)) || 'E'
+  if (Object.keys(hitCount).length === 0) {
+    return fallbackLetters.find(l => !guessedSet.has(l)) || 'E'
   }
 
   let bestLetter = null
-  let bestScore = -1
+  let bestScore  = -1
 
-  for (const [letter, count] of Object.entries(frequency)) {
-    if (count > bestScore) {
-      bestScore = count
-      bestLetter = letter
+  for (const [letter, hits] of Object.entries(hitCount)) {
+    const p = hits / n
+
+    let score
+    if (n <= 3) {
+      // Small pool: just pick most common letter to directly guess the word
+      score = p
+    } else {
+      // Entropy: maximised at p=0.5, rewards letters that split pool evenly
+      const entropy = p < 1 ? (-p * Math.log2(p) - (1 - p) * Math.log2(1 - p)) : 0
+      // Blend: 70% entropy (information gain) + 30% frequency (correctness probability)
+      score = 0.7 * entropy + 0.3 * p
     }
+
+    if (score > bestScore) { bestScore = score; bestLetter = letter }
   }
 
-  return bestLetter || fallbackLetters.find((letter) => !guessedSet.has(letter)) || 'E'
+  return bestLetter || fallbackLetters.find(l => !guessedSet.has(l)) || 'E'
 }
+
 
 const datamuse_cache = new Map()
 
