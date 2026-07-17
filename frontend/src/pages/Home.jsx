@@ -103,7 +103,7 @@ export default function Home() {
       <div className="flex flex-1 items-center justify-center p-3 sm:p-8">
         {view === 'landing' && (
           <div className="z-10 flex flex-col items-center justify-center text-center fade-in-up w-full">
-            <div className="glass-panel flex w-full max-w-[640px] lg:max-w-[780px] xl:max-w-[900px] flex-col items-center bg-[#e3d5c1] p-8 sm:p-16 lg:p-20 sm:rotate-[-1deg]">
+            <div className="glass-panel flex w-full max-w-[700px] md:max-w-[860px] lg:max-w-[960px] flex-col items-center bg-[#e3d5c1] p-6 sm:p-12 sm:rotate-[-1deg]">
               <div className="mb-6 flex w-full flex-col gap-4 border-b-4 border-dashed border-[#2c2825] pb-5 text-left sm:mb-8 sm:flex-row sm:items-start sm:justify-between sm:pb-6">
                 <div className="min-w-0">
                   <p className="mb-1 text-xs font-bold uppercase tracking-[0.18em] opacity-70 sm:text-sm">Department of Investigation</p>
@@ -150,7 +150,7 @@ export default function Home() {
         )}
 
         {view === 'setup' && (
-          <div className="z-10 w-full max-w-[640px] lg:max-w-[780px] xl:max-w-[900px] px-1 fade-in-up sm:px-2">
+          <div className="z-10 w-full max-w-[700px] md:max-w-[860px] lg:max-w-[960px] px-1 fade-in-up sm:px-2">
             <button
               onClick={() => setView('landing')}
               className="text-[#2c2825] hover:opacity-70 text-sm font-bold flex items-center gap-2 mb-4 uppercase tracking-widest transition-opacity"
