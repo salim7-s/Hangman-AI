@@ -100,7 +100,7 @@ export default function Home() {
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
 
       {/* ── Landing ── */}
-      <div className="flex flex-1 items-center justify-center p-3 sm:p-8">
+      <div className="flex flex-1 items-center justify-center p-3 sm:p-6">
         {view === 'landing' && (
           <div className="z-10 flex flex-col items-center justify-center text-center fade-in-up w-full">
             <div className="glass-panel flex w-[90%] max-w-[960px] flex-col items-center bg-[#e3d5c1] p-6 sm:p-12 sm:rotate-[-1deg]">
@@ -158,13 +158,13 @@ export default function Home() {
               &larr; Return to Archives
             </button>
 
-            <div className="glass-panel p-5 sm:rotate-[1deg] sm:p-12 lg:p-16">
-              <div className="mb-6 flex flex-col gap-3 border-b-4 border-[#2c2825] pb-4 sm:mb-8 sm:flex-row sm:items-end sm:justify-between">
-                <h2 className="text-2xl font-black uppercase tracking-[0.12em] sm:text-3xl lg:text-4xl sm:tracking-widest">Case Parameters</h2>
+            <div className="glass-panel p-5 sm:rotate-[1deg] sm:p-8">
+              <div className="mb-4 flex flex-col gap-2 border-b-4 border-[#2c2825] pb-3 sm:mb-6 sm:flex-row sm:items-end sm:justify-between">
+                <h2 className="text-2xl font-black uppercase tracking-[0.12em] sm:text-3xl sm:tracking-widest">Case Parameters</h2>
                 <span className="stamp-confidential w-fit self-start border-2 p-1 text-[11px] sm:rotate-2 sm:text-sm">AUTHORIZED EYES ONLY</span>
               </div>
 
-              <div className="space-y-10 lg:space-y-14 w-full">
+              <div className="space-y-6 w-full">
                 {/* Mode Selection */}
                 <div>
                   <p className="section-label lg:text-base">Investigation Type</p>
@@ -173,7 +173,7 @@ export default function Home() {
                       <button
                         key={item.id}
                         onClick={() => { setMode(item.id); setError(''); setWord('') }}
-                        className={`glass-card flex flex-col items-center justify-center p-4 lg:p-6 text-center ${
+                        className={`glass-card flex flex-col items-center justify-center p-3 sm:p-4 text-center ${
                           mode === item.id
                             ? 'glass-card-active shadow-none translate-y-0'
                             : 'opacity-70 border-dashed hover:opacity-100'
@@ -212,7 +212,7 @@ export default function Home() {
                       <button
                         key={item.id}
                         onClick={() => setDifficulty(item.id)}
-                        className={`glass-card flex-1 py-4 lg:py-6 text-center font-bold uppercase tracking-[0.12em] sm:tracking-widest lg:tracking-[0.18em] lg:text-2xl ${
+                         className={`glass-card flex-1 py-3 sm:py-4 text-center font-bold uppercase tracking-[0.12em] sm:tracking-widest ${
                           difficulty === item.id
                             ? 'glass-card-active border-[#8b0000] text-[#8b0000]'
                             : 'opacity-70 border-dashed hover:opacity-100'
@@ -234,7 +234,7 @@ export default function Home() {
                 <button
                   onClick={handleStart}
                   disabled={loading}
-                  className="btn-primary mt-4 w-full py-4 text-base sm:py-5 lg:py-6 sm:text-xl lg:text-2xl"
+                  className="btn-primary mt-2 w-full py-3 text-base sm:py-4 sm:text-lg"
                 >
                   {loading ? 'PROCESSING...' : 'INITIATE INVESTIGATION'}
                 </button>
