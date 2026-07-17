@@ -456,8 +456,14 @@ async function aiGuess(pattern, wrongLetters, guessedLetters, difficulty = 'medi
   let effectiveCandidates = candidates
   let usedExternalApi = false
 
-  if (!dictionaryMeta.gameplaySource.startsWith('test')) {
-    const external = await fetchDatamuseCandidates(patternChars, wrongLetters)
+  // In player-vs-ai (Reverse) mode, run local filter + Datamuse API in parallel
+  // so we cover slang, names, and brand words the player may have typed.
+  // In ai-vs-player (Solo) mode, the curated gameplay pool is sufficient — skip the API.
+  if (mode === 'player-vs-ai' && !dictionaryMeta.gameplaySource.startsWith('test')) {
+    const externalPromise = fetchDatamuseCandidates(patternChars, wrongLetters)
+
+    // Both results are now ready — local was already computed above
+    const external = await externalPromise
     if (external.length > 0) {
       const merged = new Set([...candidates, ...external])
       effectiveCandidates = [...merged]
