@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSocket } from '../hooks/useSocket'
 import { useAuth } from '../context/auth-context'
@@ -35,6 +35,11 @@ export default function MultiplayerLobby() {
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
 
+  const roleRef = useRef(role)
+  useEffect(() => {
+    roleRef.current = role
+  }, [role])
+
   useEffect(() => {
     const cleanups = [
       on('room-created', ({ code, role: nextRole, screen: nextScreen, room }) => {
@@ -70,7 +75,7 @@ export default function MultiplayerLobby() {
       on('game-state', (state) => {
         setGameState(state)
         setChatMessages(state.chatMessages || [])
-        setScreen((current) => getScreenForState(role, state.status, current === 'home' || current === 'join' ? 'game' : current))
+        setScreen((current) => getScreenForState(roleRef.current, state.status, current === 'home' || current === 'join' ? 'game' : current))
         setError('')
       }),
       on('chat-message', (message) => {
@@ -96,7 +101,7 @@ export default function MultiplayerLobby() {
     ]
 
     return () => cleanups.forEach((cleanup) => cleanup && cleanup())
-  }, [on, role])
+  }, [on])
 
   useEffect(() => {
     if (!copied) return undefined
@@ -186,7 +191,7 @@ export default function MultiplayerLobby() {
 
   return (
     <div className="app-shell p-3 sm:p-8">
-      <div className="page-wrap mx-auto max-w-6xl">
+      <div className="page-wrap mx-auto max-w-6xl lg:max-w-7xl xl:max-w-8xl">
         <div className="mb-8 flex flex-wrap items-center justify-between gap-3 border-b-4 border-dashed border-[#2c2825] pb-4">
           <button onClick={() => navigate('/')} className="text-[#2c2825] hover:opacity-70 font-bold uppercase tracking-widest text-sm transition-opacity">
             &larr; ARCHIVES
@@ -520,8 +525,8 @@ export default function MultiplayerLobby() {
                   {chatMessages.length === 0 ? (
                     <p className="text-xs font-bold uppercase opacity-60">No messages yet.</p>
                   ) : (
-                    chatMessages.map((message, index) => (
-                      <div key={`${message.senderNickname}-${message.createdAt || index}-${index}`} className="border-l-4 border-[#2c2825] pl-3">
+                    chatMessages.map((message) => (
+                      <div key={message.id || `${message.senderNickname}-${message.createdAt}`} className="border-l-4 border-[#2c2825] pl-3">
                         <div className="flex items-center justify-between gap-2">
                           <p className="min-w-0 truncate text-sm font-black uppercase">{message.senderNickname}</p>
                           <span className="shrink-0 text-[10px] font-bold uppercase opacity-50">{message.senderRole}</span>

@@ -22,6 +22,8 @@ Modern full-stack Hangman with real-time multiplayer, a three-difficulty AI solv
 
 - AI-vs-player mode where the system selects a word for the player
 - Player-vs-AI mode where the AI solves a hidden word using heuristic and entropy strategies
+- Web-Assisted Fallback (via Datamuse API) to allow the AI to guess proper nouns, slang, or out-of-dictionary words rather than failing silently
+- Interactive AI Reasoning Explainer UI that displays live entropy calculations and possibilities
 - Local two-player mode on one device
 - Real-time multiplayer rooms with role swapping on rematch
 - JWT-based auth and leaderboard support when MongoDB is available
@@ -31,21 +33,22 @@ Modern full-stack Hangman with real-time multiplayer, a three-difficulty AI solv
 
 The repo now includes quality and evaluation infrastructure that makes the project easier to defend in interviews:
 
-- backend regression tests for the AI engine and core game controller flows
-- a reproducible AI benchmark script using the production dictionary
+- robust backend validation using Zod schemas on core Express routes
+- backend regression tests expanded to 25 specs covering difficulties, positions, mock auth, and explain endpoint logic
+- a reproducible AI benchmark script using the production dictionary (includes async loop support)
 - dictionary indexing by word length to avoid full-corpus scans on every guess
 - a separate curated gameplay dictionary so players do not see raw corpus junk
 - GitHub Actions CI for backend tests plus frontend lint and build checks
 
 ## AI Benchmark Snapshot
 
-Latest local run on 2026-05-18 using `SAMPLE_SIZE=25`:
+Latest local run on 2026-07-17 using `SAMPLE_SIZE=25`:
 
 | Difficulty | Games | Win Rate | Avg Turns | Avg Wrong Guesses | Avg Latency |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Easy | 25 | 68.0% | 8.20 | 4.32 | 6.12 ms |
-| Medium | 25 | 84.0% | 8.04 | 2.76 | 27.92 ms |
-| Hard | 25 | 100.0% | 9.24 | 1.80 | 138.97 ms |
+| Easy | 25 | 60.0% | 7.44 | 4.04 | 6.90 ms |
+| Medium | 25 | 88.0% | 8.88 | 2.96 | 45.81 ms |
+| Hard | 25 | 100.0% | 9.28 | 1.76 | 206.54 ms |
 
 Full methodology and results live in [docs/ai_benchmark.md](./docs/ai_benchmark.md).
 
@@ -66,6 +69,16 @@ Environment variables:
 - `MONGO_URI` optional, enables persistence and auth-backed stats
 - `JWT_SECRET` required if auth endpoints are used
 - `JWT_EXPIRES_IN` optional, defaults to `7d`
+- `DATAMUSE_API_KEY` optional, API key for the Datamuse fallback (only required after Jan 1, 2027)
+
+### Testing Web Fallback & AI Explainer
+
+1. Start both the frontend and backend servers locally.
+2. Navigate to reverse mode ("AI interrogates you").
+3. Set a slang word or proper noun (e.g. `DIDDY`).
+4. You will see a warning banner: `Word not in AI dictionary — operating on frequency fallback`.
+5. The AI will pull wildcard match candidates from the Datamuse API, and a green `🌐 Web-Assisted` badge will appear.
+6. Click the collapsible **AI Reasoning Explainer** dashboard below to view real-time calculations, strategy details, and letter scores.
 
 ### Frontend
 

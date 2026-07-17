@@ -9,6 +9,8 @@ const RAW_WORDS_PATH = path.join(__dirname, '..', '..', 'words_250000_train.txt'
 const BLOCKLIST_PATH = path.join(__dirname, '..', 'data', 'word_blocklist.txt')
 const OUTPUT_PATH = path.join(__dirname, '..', 'data', 'words_game_curated.txt')
 
+const GOOGLE_10K_PATH = path.join(__dirname, '..', 'data', 'google-10000-english.txt')
+
 function normalizeWords(words) {
   return words
     .map((word) => word.trim().toUpperCase())
@@ -25,6 +27,19 @@ async function readWordFile(filePath) {
 
 async function main() {
   const sourceWords = normalizeWords(await readWordFile(RAW_WORDS_PATH))
+  let googleWords = []
+
+  try {
+    googleWords = normalizeWords(await readWordFile(GOOGLE_10K_PATH))
+  } catch (error) {
+    console.warn('⚠️ google-10000-english.txt missing, using raw corpus only')
+  }
+
+  const googleSet = new Set(googleWords)
+  const filteredSource = googleSet.size > 0
+    ? sourceWords.filter((word) => googleSet.has(word))
+    : sourceWords
+
   let blocklist = []
 
   try {
@@ -33,7 +48,7 @@ async function main() {
     if (error.code !== 'ENOENT') throw error
   }
 
-  const curatedWords = buildGameplayWordList(sourceWords, new Set(blocklist))
+  const curatedWords = buildGameplayWordList(filteredSource, new Set(blocklist))
   await fs.promises.mkdir(path.dirname(OUTPUT_PATH), { recursive: true })
   await fs.promises.writeFile(OUTPUT_PATH, `${curatedWords.join('\n')}\n`, 'utf-8')
 

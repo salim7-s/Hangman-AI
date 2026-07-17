@@ -26,7 +26,7 @@ yarn-error.log*
 Thumbs.db
 
 # Documentation (kept locally)
-docs/
+# docs/
 
 # Editor files
 .vscode/settings.json
@@ -36,3 +36,9 @@ docs/
 
 # Test output
 coverage/
+
+# Large dictionary files
+backend/data/google-10000-english.txt
+
+# Presentation assets
+ppt images/

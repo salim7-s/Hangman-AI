@@ -1,4 +1,4 @@
-import { useState, useEffect, useEffectEvent } from 'react'
+import { useState, useEffect, useEffectEvent, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import HangmanScene from '../components/HangmanScene'
 import Keyboard from '../components/Keyboard'
@@ -18,7 +18,7 @@ export default function Game() {
   const navigate = useNavigate()
   const init = location.state
 
-  const [gameId] = useState(init?.gameId || null)
+  const gameId = init?.gameId || null
   const [maskedWord, setMaskedWord] = useState(init?.maskedWord || '')
   const [guesses, setGuesses] = useState([])
   const [wrongGuesses, setWrongGuesses] = useState([])
@@ -27,15 +27,77 @@ export default function Game() {
   const [word, setWord] = useState('')
   const [aiGuess, setAiGuess] = useState(null)
   const [candidateCount, setCandidateCount] = useState(null)
+  const [wordNotInDict, setWordNotInDict] = useState(false)
   const [loading, setLoading] = useState(false)
   const [aiThinking, setAiThinking] = useState(false)
   const [error, setError] = useState('')
-  const [mode] = useState(init?.mode || '')
+  const [mode, setMode] = useState(init?.mode || '')
 
-  const { recordWin, recordLoss } = useStreak()
-  const [streakSnapshot, setStreakSnapshot] = useState({ streak: 0, bestStreak: 0 })
+  const { recordWin, recordLoss, streak: initialStreak, bestStreak: initialBest } = useStreak()
+  const [streakSnapshot, setStreakSnapshot] = useState({ streak: initialStreak, bestStreak: initialBest })
   const [muted, setMuted] = useState(false)
   const sounds = useSounds()
+
+  // FIX 1 — prevents AI double-guess race condition
+  const aiHasGuessedRef = useRef(false)
+
+  const [difficulty, setDifficulty] = useState(init?.difficulty || 'medium')
+  const [explanation, setExplanation] = useState(null)
+  const [showExplanation, setShowExplanation] = useState(false)
+  const [aiUsedWeb, setAiUsedWeb] = useState(false)
+
+  // Reset state when navigating to a new game ID
+  useEffect(() => {
+    if (init) {
+      setMaskedWord(init.maskedWord || '')
+      setGuesses([])
+      setWrongGuesses([])
+      setAttemptsLeft(init.attemptsLeft ?? 6)
+      setStatus('ongoing')
+      setWord('')
+      setAiGuess(null)
+      setCandidateCount(null)
+      setWordNotInDict(false)
+      setLoading(false)
+      setAiThinking(false)
+      setError('')
+      setMode(init.mode || '')
+      setDifficulty(init.difficulty || 'medium')
+      setExplanation(null)
+      setShowExplanation(false)
+      setAiUsedWeb(false)
+      aiHasGuessedRef.current = false
+    }
+  }, [init])
+
+  useEffect(() => {
+    if (mode !== 'player-vs-ai' || status !== 'ongoing' || !maskedWord) return
+
+    let active = true
+    async function fetchExplanation() {
+      try {
+        const res = await api.post('/api/game/explain', {
+          pattern: maskedWord,
+          wrongLetters: wrongGuesses,
+          guesses: guesses,
+          difficulty,
+          mode
+        })
+        if (active) {
+          setExplanation(res.data)
+          if (res.data.usedExternalApi !== undefined) {
+            setAiUsedWeb(res.data.usedExternalApi)
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch explanation:', err)
+      }
+    }
+    fetchExplanation()
+    return () => {
+      active = false
+    }
+  }, [mode, status, maskedWord, wrongGuesses, guesses, difficulty])
 
   useEffect(() => {
     if (!gameId) navigate('/')
@@ -71,23 +133,34 @@ export default function Game() {
           setAiGuess(data.aiGuess)
           setCandidateCount(data.candidateCount)
           setAiThinking(false)
+          aiHasGuessedRef.current = false
         }, 600)
+      } else {
+        aiHasGuessedRef.current = false
       }
       if (data.candidateCount !== undefined && !data.aiGuess) {
         setCandidateCount(data.candidateCount)
       }
+      if (data.wordInDictionary === false) setWordNotInDict(true)
+      if (data.aiUsedWeb !== undefined) setAiUsedWeb(data.aiUsedWeb)
 
       if (!muted) {
-        if (data.status === 'won') sounds.playWin()
-        else if (data.status === 'lost') sounds.playLose()
+        if (data.status === 'won' || data.status === 'lost') {
+          const won = mode === 'player-vs-ai' ? data.status === 'lost' : data.status === 'won'
+          if (won) sounds.playWin()
+          else sounds.playLose()
+        }
         else if (data.wrongGuesses?.length > wrongGuesses.length) sounds.playWrong()
         else sounds.playCorrect()
       }
 
-      if (data.status === 'won') setStreakSnapshot(recordWin())
-      if (data.status === 'lost') setStreakSnapshot(recordLoss())
+      if (data.status === 'won' || data.status === 'lost') {
+        const won = mode === 'player-vs-ai' ? data.status === 'lost' : data.status === 'won'
+        setStreakSnapshot(won ? recordWin() : recordLoss())
+      }
     } catch (err) {
       setError(err.response?.data?.error || 'COMMUNICATION ERROR.')
+      aiHasGuessedRef.current = false
     } finally {
       setLoading(false)
     }
@@ -97,11 +170,22 @@ export default function Game() {
     handleGuess('')
   })
 
+  // FIX 1 — reset guard when a new game begins (status flips to 'ongoing')
   useEffect(() => {
-    if (mode === 'player-vs-ai' && status === 'ongoing' && !loading && !aiThinking) {
-      const timer = setTimeout(() => {
-        queueAiTurn()
-      }, 1500)
+    if (status === 'ongoing') aiHasGuessedRef.current = false
+  }, [status])
+
+  // FIX 1 — guarded AI trigger: aiHasGuessedRef prevents double-firing
+  useEffect(() => {
+    if (
+      mode === 'player-vs-ai' &&
+      status === 'ongoing' &&
+      !loading &&
+      !aiThinking &&
+      !aiHasGuessedRef.current
+    ) {
+      aiHasGuessedRef.current = true
+      const timer = setTimeout(() => queueAiTurn(), 1500)
       return () => clearTimeout(timer)
     }
   }, [mode, status, loading, aiThinking])
@@ -126,7 +210,7 @@ export default function Game() {
 
   return (
     <div className="app-shell p-3 sm:p-8">
-      <div className="page-wrap mx-auto max-w-6xl">
+      <div className="page-wrap mx-auto max-w-6xl lg:max-w-7xl xl:max-w-8xl">
         <div className="mb-8 flex flex-wrap items-center justify-between gap-3 border-b-4 border-dashed border-[#2c2825] pb-4">
           <button
             onClick={() => navigate('/')}
@@ -185,16 +269,61 @@ export default function Game() {
                 <p className="mb-4 border-b-2 border-[#2c2825] pb-2 font-bold uppercase tracking-widest">
                   Interrogation Log
                 </p>
+                {wordNotInDict && (
+                  <p className="mb-3 border-2 border-[#8b0000] p-2 text-xs font-bold uppercase text-[#8b0000]">
+                    ⚠ Word not in AI dictionary — operating on frequency fallback
+                  </p>
+                )}
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
                     <p className="text-sm font-bold opacity-70">AI SUSPECTS:</p>
                     <p className="text-2xl font-black">{aiThinking ? '...' : aiGuess || '--'}</p>
+                    {aiUsedWeb && !aiThinking && (
+                      <p className="text-[10px] text-[#2d8a5f] font-black uppercase mt-1 animate-pulse">🌐 Web-Assisted</p>
+                    )}
                   </div>
                   <div>
                     <p className="text-sm font-bold opacity-70">POSSIBILITIES:</p>
                     <p className="text-2xl font-black">{candidateCount ?? '--'}</p>
                   </div>
                 </div>
+
+                {explanation && (
+                  <div className="mt-4 border-t-2 border-dashed border-[#2c2825] pt-4">
+                    <button
+                      onClick={() => setShowExplanation(!showExplanation)}
+                      className="w-full text-left text-xs font-black uppercase tracking-wider text-[#2c2825] underline hover:opacity-80"
+                    >
+                      {showExplanation ? '▼ HIDE AI EXPLAINER' : '▶ VIEW AI EXPLAINER'}
+                    </button>
+                    {showExplanation && (
+                      <div className="mt-3 space-y-2 text-[10px] sm:text-xs font-bold uppercase">
+                        <p><span className="opacity-60">Strategy:</span> {explanation.strategy}</p>
+                        {explanation.topCandidates && explanation.topCandidates.length > 0 && (
+                          <p>
+                            <span className="opacity-60">Top Candidates:</span>{' '}
+                            {explanation.topCandidates.join(', ')}
+                          </p>
+                        )}
+                        {explanation.letterScores && Object.keys(explanation.letterScores).length > 0 && (
+                          <div>
+                            <p className="opacity-60 mb-1">Operative Scores:</p>
+                            <div className="flex flex-wrap gap-2">
+                              {Object.entries(explanation.letterScores)
+                                .sort((a, b) => b[1] - a[1])
+                                .slice(0, 5)
+                                .map(([letter, score]) => (
+                                  <span key={letter} className="border border-[#2c2825] px-1.5 py-0.5 bg-[#f1e7d8]">
+                                    {letter}: {score}
+                                  </span>
+                                ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </section>
@@ -239,6 +368,7 @@ export default function Game() {
           streak={streakSnapshot.streak}
           bestStreak={streakSnapshot.bestStreak}
           onPlayAgain={handlePlayAgain}
+          mode={mode}
         />
       </div>
     </div>

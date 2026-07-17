@@ -3,8 +3,13 @@ import { io } from 'socket.io-client'
 import { getApiBaseUrl } from '../services/runtimeConfig'
 
 let socketInstance = null
+let lastToken = null
 
 function getSocket(token = localStorage.getItem('hangman_token')) {
+  if (socketInstance && token !== lastToken) {
+    socketInstance.disconnect()
+    socketInstance = null
+  }
   if (!socketInstance || socketInstance.disconnected) {
     socketInstance = io(getApiBaseUrl(), {
       auth: { token },
@@ -12,6 +17,7 @@ function getSocket(token = localStorage.getItem('hangman_token')) {
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
     })
+    lastToken = token
   }
 
   return socketInstance

@@ -1,6 +1,6 @@
 # Final Deployment Guide
 
-This guide covers deploying the full MERN stack application for free. We will use **MongoDB Atlas** for the database, **Render.com** for the Backend, and **Vercel** for the Frontend.
+This guide covers deploying the application with **MongoDB Atlas** for the database, **Render** for the backend, and **Vercel** for the frontend.
 
 ## Step 1: Set up MongoDB Atlas (Database)
 1. Go to [mongodb.com/cloud/atlas/register](https://www.mongodb.com/cloud/atlas/register) and create a free account.
@@ -18,12 +18,14 @@ This guide covers deploying the full MERN stack application for free. We will us
 4. Set the **Root Directory** to `backend`.
 5. Set **Build Command** to `npm install` and **Start Command** to `node server.js`.
 6. Add the following **Environment Variables**:
-   - `PORT`: `5000`
    - `NODE_ENV`: `production`
    - `MONGO_URI`: `(Paste your MongoDB connection string from Step 1)`
-   - `JWT_SECRET`: `(Generate a random secure string, e.g. "super_secret_hangman_key_123")`
-   - `CLIENT_URL`: `(Leave this blank for now, we will update it in Step 4)`
-7. Click **Create Web Service**. Wait for it to deploy and copy the URL (e.g., `https://hangman-backend.onrender.com`).
+   - `JWT_SECRET`: `(Generate a random secure string)`
+   - `JWT_EXPIRES_IN`: `7d`
+   - `CLIENT_URL`: `(Temporary placeholder, update it in Step 4)`
+   - `AI_WORD_POOL`: `game`
+7. Do not set `PORT` on Render; Render provides it automatically.
+8. Click **Create Web Service**. Wait for it to deploy and copy the URL (e.g., `https://hangman-backend.onrender.com`).
 
 ## Step 3: Deploy the Frontend (Vercel)
 1. Go to [Vercel.com](https://vercel.com/) and create a free account.
@@ -39,6 +41,16 @@ This guide covers deploying the full MERN stack application for free. We will us
 2. Go to the **Environment** tab.
 3. Update the `CLIENT_URL` variable to your new Vercel URL (e.g., `https://hangman-ai.vercel.app`).
 4. Save the changes. Render will automatically restart your backend with the correct CORS configuration allowing your frontend to communicate with it.
+
+## Production Checks
+
+After both deployments:
+
+1. Open the live frontend.
+2. Open browser DevTools and submit a login or registration request.
+3. Confirm the request URL points to your Render backend, not `http://localhost:5000`.
+4. If the live site still calls `localhost:5000`, Vercel was built without the correct `VITE_API_URL` and must be redeployed.
+5. If registration returns `500`, inspect Render logs and confirm `JWT_SECRET` and `MONGO_URI` are valid.
 
 ## Done!
 Your application is now fully deployed. Any future commits pushed to the `main` branch of your GitHub repository will automatically trigger a rebuild and deployment on both Render and Vercel.

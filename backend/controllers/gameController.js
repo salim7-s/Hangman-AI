@@ -1,9 +1,18 @@
 const mongoose = require('mongoose')
-const { getRandomWord, aiGuess } = require('../services/aiService')
+const { getRandomWord, aiGuess, aiExplain } = require('../services/aiService')
 
 // ─── In-memory fallback (used when no MONGO_URI) ──────────────────────────
 const memGames = {}
 let GameModel = null
+
+const MEM_GAME_TTL_MS = 2 * 60 * 60 * 1000 // 2 hours
+
+setInterval(() => {
+  const cutoff = Date.now() - MEM_GAME_TTL_MS
+  for (const [id, game] of Object.entries(memGames)) {
+    if (game.createdAt < cutoff) delete memGames[id]
+  }
+}, 30 * 60 * 1000) // run every 30 minutes
 
 function resetInMemoryGames() {
   for (const key of Object.keys(memGames)) {
@@ -57,7 +66,7 @@ async function startGame(req, res) {
 
     // In-memory fallback
     const gameId = `game_${Date.now()}_${Math.random().toString(36).slice(2)}`
-    memGames[gameId] = { gameId, mode, difficulty, word, maskedWord, guesses: [], wrongGuesses: [], maxAttempts: 6, status: 'ongoing', winner: null }
+    memGames[gameId] = { gameId, mode, difficulty, word, maskedWord, guesses: [], wrongGuesses: [], maxAttempts: 6, status: 'ongoing', winner: null, createdAt: Date.now() }
     return res.status(201).json({ gameId, maskedWord, attemptsLeft: 6, mode, difficulty })
   } catch (err) {
     console.error(err)
@@ -104,8 +113,8 @@ async function makeGuess(req, res) {
     // player-vs-ai: human set the word, AI is guessing automatically
     if (game.mode === 'player-vs-ai' && game.status === 'ongoing') {
       // Small safeguard: if AI already won/lost, do nothing. But status is ongoing.
-      const { letter: aiLetter, candidateCount } = aiGuess(game.maskedWord, game.wrongGuesses, game.guesses, game.difficulty)
-      aiGuessResult = { letter: aiLetter, candidateCount }
+      const { letter: aiLetter, candidateCount, wordInDictionary, usedExternalApi } = await aiGuess(game.maskedWord, game.wrongGuesses, game.guesses, game.difficulty)
+      aiGuessResult = { letter: aiLetter, candidateCount, wordInDictionary, usedExternalApi }
       
       if (!game.guesses.includes(aiLetter)) {
         game.guesses.push(aiLetter)
@@ -135,7 +144,12 @@ async function makeGuess(req, res) {
       guesses: game.guesses, attemptsLeft, status: game.status, winner: game.winner
     }
     if (game.status !== 'ongoing') response.word = game.word
-    if (aiGuessResult) { response.aiGuess = aiGuessResult.letter; response.candidateCount = aiGuessResult.candidateCount }
+    if (aiGuessResult) {
+      response.aiGuess = aiGuessResult.letter
+      response.candidateCount = aiGuessResult.candidateCount
+      response.wordInDictionary = aiGuessResult.wordInDictionary
+      response.aiUsedWeb = aiGuessResult.usedExternalApi
+    }
 
     return res.status(200).json(response)
   } catch (err) {
@@ -190,10 +204,31 @@ async function getLeaderboard(req, res) {
   }
 }
 
+// ─── POST /api/game/explain ───────────────────────────────────────────────
+async function explainGuess(req, res) {
+  try {
+    const { pattern, wrongLetters, guesses, difficulty, mode } = req.body
+    if (!pattern) return res.status(400).json({ error: 'pattern is required' })
+
+    const explanation = await aiExplain(
+      pattern,
+      wrongLetters || [],
+      guesses || [],
+      difficulty || 'medium',
+      mode || 'ai-vs-player'
+    )
+    return res.status(200).json(explanation)
+  } catch (err) {
+    console.error(err)
+    return res.status(500).json({ error: 'Failed to generate explanation' })
+  }
+}
+
 module.exports = {
   startGame,
   makeGuess,
   getGame,
   getLeaderboard,
+  explainGuess,
   __resetInMemoryGames: resetInMemoryGames,
 }

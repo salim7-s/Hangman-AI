@@ -1,5 +1,6 @@
 const mongoose = require('mongoose')
 const jwt = require('jsonwebtoken')
+const { randomUUID } = require('crypto')
 
 const memRooms = {}
 let RoomModel = null
@@ -102,6 +103,7 @@ function sanitize(room) {
       guesser: Boolean(plainRoom.guesser?.connected),
     },
     chatMessages: (plainRoom.chatMessages || []).map((message) => ({
+      id: message.id,
       senderRole: message.senderRole,
       senderNickname: message.senderNickname,
       message: message.message,
@@ -367,6 +369,7 @@ module.exports = function setupSocket(io) {
 
         const participant = getParticipantByRole(room, role)
         room.chatMessages.push({
+          id: randomUUID(),
           senderRole: role,
           senderNickname: participant.nickname,
           message: cleanMessage,

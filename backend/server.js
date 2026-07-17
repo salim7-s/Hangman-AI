@@ -1,4 +1,7 @@
 require('dotenv').config()
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET.trim() === '' || process.env.JWT_SECRET === 'change_this_to_a_long_random_secret' || process.env.JWT_SECRET === 'your_super_secret_key_change_this') {
+  console.warn('⚠️  JWT_SECRET not set or is placeholder — auth will return 503')
+}
 const http       = require('http')
 const express    = require('express')
 const cors       = require('cors')

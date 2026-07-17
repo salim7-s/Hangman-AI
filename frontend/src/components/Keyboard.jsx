@@ -26,27 +26,24 @@ export default function Keyboard({ guesses, wrongGuesses, onGuess, disabled }) {
   }, [guesses, disabled, onGuess])
 
   return (
-    <div className="mt-4 flex flex-col items-center gap-2 sm:gap-3">
+    <div className="mt-4 flex flex-col items-center gap-2 sm:gap-3 w-full">
       {ROWS.map((row, rowIndex) => (
-        <div key={rowIndex} className="flex flex-wrap justify-center gap-1.5 sm:gap-3">
+        <div key={rowIndex} className="flex justify-center gap-1 sm:gap-2 w-full max-w-full">
           {row.map((letter) => {
             const isCorrect = correctSet.has(letter)
             const isWrong = wrongSet.has(letter)
             const isUsed = usedSet.has(letter)
 
-            // Typewriter key baseline styles
-            let btnClass = "h-9 w-9 rounded-full border-2 border-[#2c2825] text-base font-bold uppercase transition-all shadow-[2px_2px_0px_#2c2825] sm:h-12 sm:w-12 sm:text-xl"
+            // Typewriter key baseline styles (shrinkable, responsive sizing)
+            let btnClass = "h-8 w-8 sm:h-12 sm:w-12 rounded-full border-2 border-[#2c2825] text-sm sm:text-xl font-bold uppercase transition-all shadow-[2px_2px_0px_#2c2825] shrink flex items-center justify-center"
             
             if (!isUsed && !disabled) {
               btnClass += " bg-[#d4c5b0] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-none"
             } else if (isCorrect) {
-              // Stamped with black ink
               btnClass += " bg-[#2c2825] text-[#d4c5b0] shadow-none translate-y-[2px] translate-x-[2px]"
             } else if (isWrong) {
-              // Strikethrough / crossed out
               btnClass += " bg-[#e3d5c1] text-[#2c2825] opacity-50 shadow-none translate-y-[2px] translate-x-[2px] relative overflow-hidden"
             } else {
-              // Just disabled
               btnClass += " bg-[#e3d5c1] opacity-50 shadow-none translate-y-[2px] translate-x-[2px]"
             }
 
@@ -60,7 +57,6 @@ export default function Keyboard({ guesses, wrongGuesses, onGuess, disabled }) {
                 className={btnClass}
               >
                 {letter}
-                {/* Visual crossed out line for wrong guesses */}
                 {isWrong && (
                   <div className="absolute inset-0 bg-[#8b0000] opacity-80 w-full h-[2px] top-1/2 -mt-[1px] -rotate-45 pointer-events-none"></div>
                 )}

@@ -3,6 +3,7 @@ const {
   getWordsByDifficulty,
   getDictionaryStats,
   aiGuess,
+  dictionaryMeta,
 } = require('../services/aiService')
 
 const SAMPLE_SIZE = Number.parseInt(process.env.SAMPLE_SIZE || '25', 10)
@@ -17,19 +18,15 @@ function buildMaskedWord(word, guesses) {
 }
 
 function sampleWords(words, size) {
-  if (words.length <= size) return [...words]
-
-  const step = words.length / size
-  const sample = []
-
-  for (let index = 0; index < size; index++) {
-    sample.push(words[Math.floor(index * step)])
+  const shuffled = [...words]
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
   }
-
-  return sample
+  return shuffled.slice(0, Math.min(size, shuffled.length))
 }
 
-function runSimulation(word, difficulty) {
+async function runSimulation(word, difficulty) {
   const guesses = []
   const wrongGuesses = []
   const startedAt = process.hrtime.bigint()
@@ -37,7 +34,7 @@ function runSimulation(word, difficulty) {
   let maskedWord = buildMaskedWord(word, guesses)
 
   while (wrongGuesses.length < MAX_ATTEMPTS && maskedWord.includes('_')) {
-    const { letter } = aiGuess(maskedWord, wrongGuesses, guesses, difficulty)
+    const { letter } = await aiGuess(maskedWord, wrongGuesses, guesses, difficulty)
 
     if (guesses.includes(letter)) {
       break
@@ -87,6 +84,7 @@ function summarize(results) {
 
 async function main() {
   await loadDictionary()
+  dictionaryMeta.gameplaySource = 'test-benchmark'
 
   console.log('AI benchmark configuration')
   console.log(JSON.stringify({
@@ -98,7 +96,7 @@ async function main() {
   for (const difficulty of DIFFICULTIES) {
     const words = getWordsByDifficulty(difficulty)
     const sample = sampleWords(words, SAMPLE_SIZE)
-    const results = sample.map((word) => runSimulation(word, difficulty))
+    const results = await Promise.all(sample.map((word) => runSimulation(word, difficulty)))
     const summary = summarize(results)
 
     console.log(`\n${difficulty.toUpperCase()}`)

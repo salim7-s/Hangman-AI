@@ -4,7 +4,7 @@ const path = require('path')
 const RAW_WORDS_PATH = path.join(__dirname, '..', '..', 'words_250000_train.txt')
 const DEFAULT_GAME_WORDS_PATH = path.join(__dirname, '..', 'data', 'words_game_curated.txt')
 const DEFAULT_BLOCKLIST_PATH = path.join(__dirname, '..', 'data', 'word_blocklist.txt')
-const AI_POOL_MODE = (process.env.AI_WORD_POOL || 'game').toLowerCase()
+const AI_POOL_MODE = (process.env.AI_WORD_POOL || 'full').toLowerCase()
 const MIN_GAME_WORD_LENGTH = 4
 const MAX_GAME_WORD_LENGTH = 10
 const GAME_DIFFICULTY_RANGES = {
@@ -90,21 +90,37 @@ function setRawWords(words) {
   rawWordsByLength = indexWordsByLength(words)
 }
 
+function evaluateWordDifficulty(word) {
+  const commonLetters = new Set(['E', 'T', 'A', 'O', 'I', 'N', 'S', 'R', 'H'])
+  let commonCount = 0
+  for (const char of word) {
+    if (commonLetters.has(char)) commonCount++
+  }
+  const commonRatio = commonCount / word.length
+  const uniqueCount = new Set(word).size
+  
+  // Heuristic difficulty score (higher score = easier to guess)
+  const score = uniqueCount * 0.4 + commonRatio * 3.0 + word.length * 0.3
+  return score
+}
+
 function setGameplayWords(words, source) {
   gameplayWords = words
   gameplayWordsByLength = indexWordsByLength(words)
-  easyWords = gameplayWords.filter((word) => {
-    const [min, max] = GAME_DIFFICULTY_RANGES.easy
-    return word.length >= min && word.length <= max
-  })
-  mediumWords = gameplayWords.filter((word) => {
-    const [min, max] = GAME_DIFFICULTY_RANGES.medium
-    return word.length >= min && word.length <= max
-  })
-  hardWords = gameplayWords.filter((word) => {
-    const [min, max] = GAME_DIFFICULTY_RANGES.hard
-    return word.length >= min && word.length <= max
-  })
+
+  const sortedWords = gameplayWords
+    .map((word) => ({ word, score: evaluateWordDifficulty(word) }))
+    .sort((a, b) => a.score - b.score)
+    .map((entry) => entry.word)
+
+  const total = sortedWords.length
+  const hardCut = Math.floor(total * 0.33)
+  const mediumCut = Math.floor(total * 0.67)
+
+  hardWords = sortedWords.slice(0, hardCut)
+  mediumWords = sortedWords.slice(hardCut, mediumCut)
+  easyWords = sortedWords.slice(mediumCut)
+
   dictionaryMeta.gameplaySource = source
 }
 
@@ -333,10 +349,15 @@ function aiGuessHard(candidates, wordLen, guessedSet, fallbackLetters) {
   }
 
   const possibleLetters = new Set()
+  const frequency = {}
   for (const word of candidates) {
+    const seen = new Set()
     for (const char of word) {
-      if (!guessedSet.has(char)) {
-        possibleLetters.add(char)
+      if (guessedSet.has(char)) continue
+      possibleLetters.add(char)
+      if (!seen.has(char)) {
+        frequency[char] = (frequency[char] || 0) + 1
+        seen.add(char)
       }
     }
   }
@@ -346,27 +367,11 @@ function aiGuessHard(candidates, wordLen, guessedSet, fallbackLetters) {
   }
 
   let bestLetter = null
-  let maxEntropy = -1
+  let bestScore = -1
 
-  for (const letter of possibleLetters) {
-    const buckets = {}
-
-    for (const word of candidates) {
-      let patternMatch = ''
-      for (let index = 0; index < wordLen; index++) {
-        patternMatch += word[index] === letter ? '1' : '0'
-      }
-      buckets[patternMatch] = (buckets[patternMatch] || 0) + 1
-    }
-
-    let entropy = 0
-    for (const count of Object.values(buckets)) {
-      const probability = count / candidateCount
-      entropy -= probability * Math.log2(probability)
-    }
-
-    if (entropy > maxEntropy) {
-      maxEntropy = entropy
+  for (const [letter, count] of Object.entries(frequency)) {
+    if (count > bestScore) {
+      bestScore = count
       bestLetter = letter
     }
   }
@@ -374,7 +379,45 @@ function aiGuessHard(candidates, wordLen, guessedSet, fallbackLetters) {
   return bestLetter || fallbackLetters.find((letter) => !guessedSet.has(letter)) || 'E'
 }
 
-function aiGuess(pattern, wrongLetters, guessedLetters, difficulty = 'medium') {
+const datamuse_cache = new Map()
+
+async function fetchDatamuseCandidates(patternChars, wrongLetters) {
+  const sp = patternChars.map((ch) => ch === '_' ? '?' : ch.toLowerCase()).join('')
+  const cacheKey = `${sp}|${wrongLetters.slice().sort().join('')}`
+
+  if (datamuse_cache.has(cacheKey)) return datamuse_cache.get(cacheKey)
+
+  try {
+    const keyParam = process.env.DATAMUSE_API_KEY
+      ? `&key=${process.env.DATAMUSE_API_KEY}`
+      : ''
+    const url = `https://api.datamuse.com/words?sp=${encodeURIComponent(sp)}&max=500${keyParam}`
+    
+    const res = await fetch(url, { signal: AbortSignal.timeout(2000) })
+    if (!res.ok) return []
+
+    const data = await res.json()
+    const wrongSet = new Set(wrongLetters.map((l) => l.toUpperCase()))
+
+    const candidates = data
+      .map((entry) => entry.word.toUpperCase().replace(/\s+/g, ''))
+      .filter((word) =>
+        word.length === patternChars.length &&
+        /^[A-Z]+$/.test(word) &&
+        ![...wrongSet].some((bad) => word.includes(bad))
+      )
+
+    datamuse_cache.set(cacheKey, candidates)
+    setTimeout(() => datamuse_cache.delete(cacheKey), 5 * 60 * 1000)
+
+    return candidates
+  } catch (err) {
+    console.error('Datamuse API error:', err.message)
+    return []
+  }
+}
+
+async function aiGuess(pattern, wrongLetters, guessedLetters, difficulty = 'medium', mode = 'ai-vs-player') {
   const fallbackLetters = [
     'E', 'T', 'A', 'O', 'I', 'N', 'S', 'R', 'H', 'L', 'D', 'C', 'U',
     'P', 'F', 'M', 'W', 'Y', 'B', 'G', 'V', 'K', 'Q', 'J', 'X', 'Z',
@@ -389,9 +432,12 @@ function aiGuess(pattern, wrongLetters, guessedLetters, difficulty = 'medium') {
 
   const patternChars = pattern.split(' ')
   const wordLen = patternChars.length
-  const sourceWords = aiWordsByLength.get(wordLen) || []
+  
+  const poolMode = mode === 'player-vs-ai' ? 'full' : 'game'
+  const activeWordsByLength = poolMode === 'full' ? rawWordsByLength : gameplayWordsByLength
+  const sourceWords = activeWordsByLength.get(wordLen) || []
 
-  const candidates = sourceWords.filter((word) => {
+  let candidates = sourceWords.filter((word) => {
     for (let index = 0; index < wordLen; index++) {
       if (patternChars[index] !== '_' && word[index] !== patternChars[index]) {
         return false
@@ -407,20 +453,131 @@ function aiGuess(pattern, wrongLetters, guessedLetters, difficulty = 'medium') {
     return true
   })
 
-  const candidateCount = candidates.length
+  let effectiveCandidates = candidates
+  let usedExternalApi = false
+
+  if (!dictionaryMeta.gameplaySource.startsWith('test')) {
+    const external = await fetchDatamuseCandidates(patternChars, wrongLetters)
+    if (external.length > 0) {
+      const merged = new Set([...candidates, ...external])
+      effectiveCandidates = [...merged]
+      usedExternalApi = true
+    }
+  }
+
+  const candidateCount = effectiveCandidates.length
   const guessedSet = new Set(guessedLetters.map((letter) => letter.toUpperCase()))
+  const isFirstGuess = guessedLetters.length === 0 && wrongLetters.length === 0
+  const wordInDictionary = candidates.length > 0 || !isFirstGuess
 
   let letter = 'E'
 
   if (difficulty === 'easy') {
-    letter = aiGuessEasy(candidates, guessedSet, fallbackLetters)
+    letter = aiGuessEasy(effectiveCandidates, guessedSet, fallbackLetters)
   } else if (difficulty === 'hard') {
-    letter = aiGuessHard(candidates, wordLen, guessedSet, fallbackLetters)
+    letter = aiGuessHard(effectiveCandidates, wordLen, guessedSet, fallbackLetters)
   } else {
-    letter = aiGuessMedium(candidates, patternChars, wordLen, guessedSet, fallbackLetters)
+    letter = aiGuessMedium(effectiveCandidates, patternChars, wordLen, guessedSet, fallbackLetters)
   }
 
-  return { letter, candidateCount }
+  return { letter, candidateCount, wordInDictionary, usedExternalApi }
+}
+
+async function aiExplain(pattern, wrongLetters, guessedLetters, difficulty = 'medium', mode = 'ai-vs-player') {
+  if (!Array.isArray(wrongLetters)) {
+    wrongLetters = wrongLetters ? [...wrongLetters] : []
+  }
+  if (!Array.isArray(guessedLetters)) {
+    guessedLetters = guessedLetters ? [...guessedLetters] : []
+  }
+
+  const patternChars = pattern.split(' ')
+  const wordLen = patternChars.length
+  
+  const poolMode = mode === 'player-vs-ai' ? 'full' : 'game'
+  const activeWordsByLength = poolMode === 'full' ? rawWordsByLength : gameplayWordsByLength
+  const sourceWords = activeWordsByLength.get(wordLen) || []
+
+  let candidates = sourceWords.filter((word) => {
+    for (let index = 0; index < wordLen; index++) {
+      if (patternChars[index] !== '_' && word[index] !== patternChars[index]) {
+        return false
+      }
+    }
+
+    for (const wrongLetter of wrongLetters) {
+      if (word.includes(wrongLetter)) {
+        return false
+      }
+    }
+
+    return true
+  })
+
+  let effectiveCandidates = candidates
+  let usedExternalApi = false
+
+  if (!dictionaryMeta.gameplaySource.startsWith('test')) {
+    const external = await fetchDatamuseCandidates(patternChars, wrongLetters)
+    if (external.length > 0) {
+      const merged = new Set([...candidates, ...external])
+      effectiveCandidates = [...merged]
+      usedExternalApi = true
+    }
+  }
+
+  const candidateCount = effectiveCandidates.length
+  const guessedSet = new Set(guessedLetters.map((letter) => letter.toUpperCase()))
+
+  const topCandidates = effectiveCandidates.slice(0, 5)
+
+  const possibleLetters = new Set()
+  for (const word of effectiveCandidates) {
+    for (const char of word) {
+      if (!guessedSet.has(char)) {
+        possibleLetters.add(char)
+      }
+    }
+  }
+
+  const letterScores = {}
+  
+  if (difficulty === 'hard') {
+    for (const letter of possibleLetters) {
+      const count = effectiveCandidates.filter((w) => w.includes(letter)).length
+      letterScores[letter] = Number((count / candidateCount).toFixed(3))
+    }
+  } else if (difficulty === 'easy') {
+    for (const letter of possibleLetters) {
+      const count = effectiveCandidates.filter((w) => w.includes(letter)).length
+      letterScores[letter] = Number((count / candidateCount).toFixed(3))
+    }
+  } else {
+    for (const letter of possibleLetters) {
+      const count = effectiveCandidates.filter((w) => w.includes(letter)).length
+      const normalizedFrequency = count / candidateCount
+      letterScores[letter] = Number(normalizedFrequency.toFixed(3))
+    }
+  }
+
+  const { letter: chosenLetter, wordInDictionary } = await aiGuess(pattern, wrongLetters, guessedLetters, difficulty)
+
+  let strategy = 'Letter frequency'
+  if (difficulty === 'hard') {
+    strategy = 'Candidate Letter Frequency'
+  } else if (difficulty === 'easy') {
+    strategy = 'Randomized Frequency'
+  }
+
+  return {
+    candidatesRemaining: candidateCount,
+    topCandidates,
+    letterScores,
+    nextGuess: chosenLetter,
+    strategy,
+    wordInDictionary,
+    usedExternalApi,
+  }
 }
 
 function __setDictionaryForTests(words, options = {}) {
@@ -456,6 +613,8 @@ module.exports = {
   getDictionaryStats,
   buildGameplayWordList,
   aiGuess,
+  aiExplain,
   __setDictionaryForTests,
   __resetDictionaryForTests,
+  dictionaryMeta,
 }

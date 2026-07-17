@@ -3,6 +3,7 @@ const path = require('path')
 const suites = [
   require(path.join(__dirname, 'aiService.test.js')),
   require(path.join(__dirname, 'gameController.test.js')),
+  require(path.join(__dirname, 'authMiddleware.test.js')),
 ]
 
 async function main() {
