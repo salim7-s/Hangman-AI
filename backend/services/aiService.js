@@ -4,6 +4,7 @@ const path = require('path')
 const RAW_WORDS_PATH = path.join(__dirname, '..', 'data', 'words_alpha.txt')
 const DEFAULT_GAME_WORDS_PATH = path.join(__dirname, '..', 'data', 'words_game_curated.txt')
 const DEFAULT_BLOCKLIST_PATH = path.join(__dirname, '..', 'data', 'word_blocklist.txt')
+const LEARNING_PATH = path.join(__dirname, '..', 'data', 'ai_learning.json')
 const AI_POOL_MODE = (process.env.AI_WORD_POOL || 'full').toLowerCase()
 const MIN_GAME_WORD_LENGTH = 4
 const MAX_GAME_WORD_LENGTH = 10
@@ -12,6 +13,50 @@ const GAME_DIFFICULTY_RANGES = {
   medium: [6, 8],
   hard: [9, 10],
 }
+
+// ── Persistent Learning Store ─────────────────────────────────────────────────
+// Tracks which letters the AI wasted on wrong guesses, keyed by word length.
+// Penalties decay over time so old mistakes don't dominate forever.
+// Format: { "4": { "E": 3.2, "T": 1.5 }, "6": { "Q": 2.0 } }
+let learningStore = {}
+
+function loadLearning() {
+  try {
+    if (fs.existsSync(LEARNING_PATH)) {
+      learningStore = JSON.parse(fs.readFileSync(LEARNING_PATH, 'utf-8'))
+    }
+  } catch { learningStore = {} }
+}
+
+function saveLearning() {
+  try { fs.writeFileSync(LEARNING_PATH, JSON.stringify(learningStore, null, 2)) } catch {}
+}
+
+// Called after each LOSS to record which letters were wasted
+function recordLoss(wordLength, wrongLetters) {
+  const key = String(wordLength)
+  if (!learningStore[key]) learningStore[key] = {}
+  for (const letter of wrongLetters) {
+    // Accumulate penalty; each loss adds 1.0, decayed by 0.9 on re-access
+    learningStore[key][letter] = (learningStore[key][letter] || 0) + 1.0
+  }
+  // Decay ALL existing penalties by 5% so old data fades
+  for (const l of Object.keys(learningStore[key])) {
+    learningStore[key][l] *= 0.95
+    if (learningStore[key][l] < 0.1) delete learningStore[key][l]
+  }
+  saveLearning()
+}
+
+// Returns a penalty multiplier for a letter given word length (1.0 = no penalty)
+function getLearningPenalty(letter, wordLength) {
+  const key = String(wordLength)
+  const penalty = learningStore[key]?.[letter] || 0
+  // Max 40% reduction in score; penalty of 5 = full 40% reduction
+  return 1.0 - Math.min(penalty / 5, 0.4)
+}
+
+loadLearning()
 
 let rawWords = []
 let gameplayWords = []
@@ -250,16 +295,11 @@ function aiGuessEasy(candidates, guessedSet, fallbackLetters) {
   return ENGLISH_FREQ.find(l => !guessedSet.has(l)) || fallbackLetters.find(l => !guessedSet.has(l)) || 'E'
 }
 
-// ── MEDIUM: candidate letter frequency ───────────────────────────────────────
-// The industry-standard approach. For each unguessed letter, count how many
-// candidate words contain it. Pick the letter appearing in the most words.
-// This is statistically optimal for maximising the probability of a correct guess.
+// ── MEDIUM: candidate letter frequency + learning ────────────────────────────
 function aiGuessMedium(candidates, patternChars, wordLen, guessedSet, fallbackLetters) {
   if (candidates.length === 0) {
     return fallbackLetters.find(l => !guessedSet.has(l)) || 'E'
   }
-
-  // If only 1 candidate left, spell it out
   if (candidates.length === 1) {
     for (const char of candidates[0]) {
       if (!guessedSet.has(char)) return char
@@ -277,21 +317,23 @@ function aiGuessMedium(candidates, patternChars, wordLen, guessedSet, fallbackLe
     }
   }
 
-  let bestLetter = null
-  let bestScore  = -1
+  const n = candidates.length
+  let bestLetter = null, bestScore = -1
   for (const [letter, count] of Object.entries(frequency)) {
-    if (count > bestScore) { bestScore = count; bestLetter = letter }
+    // Apply learning penalty — letters frequently wasted in past games score lower
+    const score = (count / n) * getLearningPenalty(letter, wordLen)
+    if (score > bestScore) { bestScore = score; bestLetter = letter }
   }
 
   return bestLetter || fallbackLetters.find(l => !guessedSet.has(l)) || 'E'
 }
 
-// ── HARD: entropy-based scoring ──────────────────────────────────────────────
-// Picks the letter that best SPLITS the candidate pool.
-// Entropy = -p*log2(p) - (1-p)*log2(1-p), maximised at p=0.5.
-// A letter in exactly 50% of candidates gives maximum information per guess.
-// When the candidate pool is very small (≤ 3), switches back to pure frequency
-// to just directly guess the answer rather than splitting further.
+// ── HARD: pure candidate frequency (optimal for hangman with limited lives) ──
+// For each unguessed letter, count how many candidate words contain it.
+// Pick the one with the highest count — this maximises the probability that
+// the next guess is CORRECT, which is what matters when wrong guesses cost lives.
+// Entropy is theoretically elegant but trades correct guesses for information gain,
+// wasting lives on "splitter" letters that never appear in the actual word.
 function aiGuessHard(candidates, wordLen, guessedSet, fallbackLetters) {
   const n = candidates.length
   if (n === 0) return fallbackLetters.find(l => !guessedSet.has(l)) || 'E'
@@ -301,43 +343,30 @@ function aiGuessHard(candidates, wordLen, guessedSet, fallbackLetters) {
     }
   }
 
-  // Count how many candidates contain each letter
-  const hitCount = {}
+  // Build letter frequency across all candidates
+  const freq = {}
   for (const word of candidates) {
     const seen = new Set()
     for (const char of word) {
       if (!guessedSet.has(char) && !seen.has(char)) {
-        hitCount[char] = (hitCount[char] || 0) + 1
+        freq[char] = (freq[char] || 0) + 1
         seen.add(char)
       }
     }
   }
 
-  if (Object.keys(hitCount).length === 0) {
+  if (Object.keys(freq).length === 0) {
     return fallbackLetters.find(l => !guessedSet.has(l)) || 'E'
   }
 
-  let bestLetter = null
-  let bestScore  = -1
-
-  for (const [letter, hits] of Object.entries(hitCount)) {
-    const p = hits / n
-
-    let score
-    if (n <= 3) {
-      // Small pool: just pick most common letter to directly guess the word
-      score = p
-    } else {
-      // Entropy: maximised at p=0.5, rewards letters that split pool evenly
-      const entropy = p < 1 ? (-p * Math.log2(p) - (1 - p) * Math.log2(1 - p)) : 0
-      // Blend: 70% entropy (information gain) + 30% frequency (correctness probability)
-      score = 0.7 * entropy + 0.3 * p
-    }
-
-    if (score > bestScore) { bestScore = score; bestLetter = letter }
+  // Pick the letter with highest frequency, penalised by past losses
+  let best = null, bestScore = -1
+  for (const [letter, count] of Object.entries(freq)) {
+    const score = (count / n) * getLearningPenalty(letter, wordLen)
+    if (score > bestScore) { bestScore = score; best = letter }
   }
 
-  return bestLetter || fallbackLetters.find(l => !guessedSet.has(l)) || 'E'
+  return best || fallbackLetters.find(l => !guessedSet.has(l)) || 'E'
 }
 
 
@@ -582,6 +611,7 @@ module.exports = {
   buildGameplayWordList,
   aiGuess,
   aiExplain,
+  recordLoss,
   __setDictionaryForTests,
   __resetDictionaryForTests,
   dictionaryMeta,

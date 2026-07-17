@@ -1,5 +1,5 @@
 const mongoose = require('mongoose')
-const { getRandomWord, aiGuess, aiExplain } = require('../services/aiService')
+const { getRandomWord, aiGuess, aiExplain, recordLoss } = require('../services/aiService')
 
 // ─── In-memory fallback (used when no MONGO_URI) ──────────────────────────
 const memGames = {}
@@ -123,7 +123,11 @@ async function makeGuess(req, res) {
           if (!game.maskedWord.includes('_')) { game.status = 'won'; game.winner = 'ai' }
         } else {
           game.wrongGuesses.push(aiLetter)
-          if (game.wrongGuesses.length >= game.maxAttempts) { game.status = 'lost'; game.winner = 'player' }
+          if (game.wrongGuesses.length >= game.maxAttempts) {
+            game.status = 'lost'; game.winner = 'player'
+            // Teach the AI: record which letters it wasted on this loss
+            recordLoss(game.word.length, game.wrongGuesses)
+          }
         }
       }
     }
