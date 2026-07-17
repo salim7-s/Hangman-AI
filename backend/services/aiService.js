@@ -1,7 +1,7 @@
 const fs = require('fs')
 const path = require('path')
 
-const RAW_WORDS_PATH = path.join(__dirname, '..', '..', 'words_250000_train.txt')
+const RAW_WORDS_PATH = path.join(__dirname, '..', 'data', 'words_alpha.txt')
 const DEFAULT_GAME_WORDS_PATH = path.join(__dirname, '..', 'data', 'words_game_curated.txt')
 const DEFAULT_BLOCKLIST_PATH = path.join(__dirname, '..', 'data', 'word_blocklist.txt')
 const AI_POOL_MODE = (process.env.AI_WORD_POOL || 'full').toLowerCase()
