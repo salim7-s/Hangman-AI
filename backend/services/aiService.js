@@ -163,18 +163,9 @@ function setGameplayWords(words, source) {
   gameplayWords = words
   gameplayWordsByLength = indexWordsByLength(words)
 
-  const sortedWords = gameplayWords
-    .map((word) => ({ word, score: evaluateWordDifficulty(word) }))
-    .sort((a, b) => a.score - b.score)
-    .map((entry) => entry.word)
-
-  const total = sortedWords.length
-  const hardCut = Math.floor(total * 0.33)
-  const mediumCut = Math.floor(total * 0.67)
-
-  hardWords = sortedWords.slice(0, hardCut)
-  mediumWords = sortedWords.slice(hardCut, mediumCut)
-  easyWords = sortedWords.slice(mediumCut)
+  easyWords = gameplayWords.filter((w) => w.length >= 4 && w.length <= 5)
+  mediumWords = gameplayWords.filter((w) => w.length >= 6 && w.length <= 7)
+  hardWords = gameplayWords.filter((w) => w.length >= 8 && w.length <= 10)
 
   dictionaryMeta.gameplaySource = source
 }
@@ -265,16 +256,21 @@ async function loadDictionary() {
 }
 
 function getWordsByDifficulty(difficulty) {
+  let pool
   switch (difficulty) {
     case 'easy':
-      return easyWords
+      pool = easyWords
+      break
     case 'medium':
-      return mediumWords
+      pool = mediumWords
+      break
     case 'hard':
-      return hardWords
+      pool = hardWords
+      break
     default:
-      return mediumWords
+      pool = mediumWords
   }
+  return pool && pool.length ? pool : (gameplayWords.length ? gameplayWords : rawWords)
 }
 
 function getRandomWord(difficulty) {
