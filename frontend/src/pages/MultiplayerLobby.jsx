@@ -4,6 +4,7 @@ import { useSocket } from '../hooks/useSocket'
 import { useAuth } from '../context/auth-context'
 import api from '../services/api'
 import HangmanScene from '../components/HangmanScene'
+import InspectorGuide from '../components/InspectorGuide'
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
 
@@ -558,6 +559,15 @@ export default function MultiplayerLobby() {
           </div>
         </div>
       </div>
+
+      {/* FLOATING MULTIPLAYER COMPANION MASCOT */}
+      <InspectorGuide
+        view={hasActiveRoom ? (gameState?.status === 'game' ? 'game' : 'landing') : 'landing'}
+        mode="player-vs-player"
+        attemptsLeft={gameState ? gameState.attemptsLeft : 6}
+        status={gameState?.status === 'won' ? 'won' : gameState?.status === 'lost' ? 'lost' : 'ongoing'}
+        allowAbilities={false}
+      />
     </div>
   )
 }

@@ -98,6 +98,7 @@ function sanitize(room) {
     attemptsLeft: plainRoom.maxAttempts - plainRoom.wrongGuesses.length,
     wordGiver: plainRoom.wordGiver?.nickname,
     guesser: plainRoom.guesser?.nickname || null,
+    allowAbilities: plainRoom.allowAbilities !== false,
     connections: {
       wordGiver: Boolean(plainRoom.wordGiver?.connected),
       guesser: Boolean(plainRoom.guesser?.connected),
@@ -155,7 +156,7 @@ module.exports = function setupSocket(io) {
     console.log(`Socket connected: ${socket.id}`)
     socket.data.user = null
 
-    socket.on('create-room', async ({ nickname }) => {
+    socket.on('create-room', async ({ nickname, allowAbilities = true }) => {
       try {
         const currentUser = socket.data.user || await resolveSocketUser(socket)
         socket.data.user = currentUser || null
@@ -180,6 +181,7 @@ module.exports = function setupSocket(io) {
           guesses: [],
           wrongGuesses: [],
           maxAttempts: 6,
+          allowAbilities: allowAbilities !== false,
           status: 'waiting',
           chatMessages: [],
         })

@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import HangmanScene from '../components/HangmanScene'
 import Keyboard from '../components/Keyboard'
 import ResultModal from '../components/ResultModal'
+import InspectorGuide from '../components/InspectorGuide'
 import api from '../services/api'
 import { useStreak } from '../hooks/useStreak'
 import { useSounds } from '../hooks/useSounds'
@@ -45,6 +46,12 @@ export default function Game() {
   const [explanation, setExplanation] = useState(null)
   const [showExplanation, setShowExplanation] = useState(false)
   const [aiUsedWeb, setAiUsedWeb] = useState(false)
+
+  // ── IN-GAME INSPECTOR ABILITY STATES ──
+  const [shieldActive, setShieldActive] = useState(false)
+  const [eliminatedLetters, setEliminatedLetters] = useState([])
+  const shieldActiveRef = useRef(false)
+  shieldActiveRef.current = shieldActive
 
 
   useEffect(() => {
@@ -127,8 +134,24 @@ export default function Game() {
           if (won) sounds.playWin()
           else sounds.playLose()
         }
-        else if (data.wrongGuesses?.length > wrongGuesses.length) sounds.playWrong()
+        else if (data.wrongGuesses?.length > wrongGuesses.length) {
+          if (shieldActiveRef.current) {
+            // Shield absorbs the wrong guess sound and effect
+            sounds.playCorrect()
+          } else {
+            sounds.playWrong()
+          }
+        }
         else sounds.playCorrect()
+      }
+
+      // Check if Banana Strike Shield absorbed a wrong guess
+      if (shieldActiveRef.current && data.wrongGuesses?.length > wrongGuesses.length) {
+        setShieldActive(false)
+        shieldActiveRef.current = false
+        // Restore 1 attempt because shield absorbed the penalty
+        setAttemptsLeft((prev) => Math.min(6, prev + 1))
+        setError("🍌 Banana Strike Shield absorbed the wrong strike penalty!")
       }
 
       if (data.status === 'won' || data.status === 'lost') {
@@ -140,6 +163,58 @@ export default function Game() {
       aiHasGuessedRef.current = false
     } finally {
       setLoading(false)
+    }
+  }
+
+  // ── IN-GAME INSPECTOR ABILITY ACTIVATION ──
+  const handleInspectorAbility = async (charId, { speak }) => {
+    if (status !== 'ongoing') return
+
+    if (charId === 2) {
+      // MINION: Banana Strike Shield
+      setShieldActive(true)
+      shieldActiveRef.current = true
+      speak("🍌 BANANAAAA! Baboi tulaliloo papoy! Bee-do bee-do shield active! Next wrong guess absorbed!")
+    } else if (charId === 3) {
+      // DORAEMON: Pocket Letter Probe (Reveal 1 correct letter for free)
+      try {
+        // Query top candidate letters from explain API or pick high frequency vowel
+        const res = await api.post('/api/game/explain', {
+          pattern: maskedWord,
+          wrongLetters: wrongGuesses,
+          guesses: guesses,
+          difficulty,
+          mode,
+        })
+        const candidates = res.data?.letterScores || {}
+        const sorted = Object.entries(candidates)
+          .filter(([l]) => !guesses.includes(l) && !wrongGuesses.includes(l))
+          .sort((a, b) => b[1] - a[1])
+
+        const probeLetter = sorted.length > 0 ? sorted[0][0] : ['E', 'A', 'O', 'I', 'T', 'N', 'S'].find((l) => !guesses.includes(l)) || 'E'
+
+        speak(`🐱 4D Pocket Gadget Deployed! Probe scanning evidence board for letter '${probeLetter}'!`)
+        setTimeout(() => {
+          handleGuess(probeLetter)
+        }, 500)
+      } catch {
+        const fallback = ['E', 'A', 'O', 'I', 'T'].find((l) => !guesses.includes(l)) || 'E'
+        speak(`🐱 4D Pocket Gadget Deployed! Uncovered letter '${fallback}'!`)
+        setTimeout(() => {
+          handleGuess(fallback)
+        }, 500)
+      }
+    } else if (charId === 4) {
+      // SPIDER-MAN: Spider-Sense Purge (Webs up 3 wrong trap letters on keyboard)
+      const alphabet = 'QWERTYUIOPASDFGHJKLZXCVBNM'.split('')
+      const unused = alphabet.filter((l) => !guesses.includes(l) && !wrongGuesses.includes(l) && !eliminatedLetters.includes(l))
+      
+      // Pick low frequency trap letters that are not currently guessed
+      const trapPool = unused.filter((l) => ['Z', 'X', 'Q', 'J', 'K', 'V', 'B', 'P', 'W', 'Y'].includes(l))
+      const purged = (trapPool.length >= 3 ? trapPool : unused).slice(0, 3)
+
+      setEliminatedLetters((prev) => [...prev, ...purged])
+      speak(`🕷️ Spider-Sense Purge! Traps [${purged.join(', ')}] permanently webbed up on keyboard!`)
     }
   }
 
@@ -333,6 +408,7 @@ export default function Game() {
                   wrongGuesses={wrongGuesses}
                   onGuess={handleGuess}
                   disabled={keyboardDisabled}
+                  eliminatedLetters={eliminatedLetters}
                 />
               </div>
             </div>
@@ -346,6 +422,18 @@ export default function Game() {
           bestStreak={streakSnapshot.bestStreak}
           onPlayAgain={handlePlayAgain}
           mode={mode}
+        />
+
+        {/* ── Active Gameplay Inspector Guide ── */}
+        <InspectorGuide
+          view="game"
+          mode={mode}
+          difficulty={difficulty}
+          attemptsLeft={attemptsLeft}
+          status={status}
+          aiGuess={aiGuess}
+          candidateCount={candidateCount}
+          onUseAbility={handleInspectorAbility}
         />
       </div>
     </div>

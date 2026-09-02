@@ -4,8 +4,8 @@ import { MathUtils } from 'three'
 import { Edges, RoundedBox } from '@react-three/drei'
 
 /* ─── Body part definitions ─────────────────────────────────────
-   Better proportions, rounder shapes, distinct hand/foot pieces.
-   Material = meshStandardMaterial so lighting actually works.
+   Proportions, rounder shapes, distinct hand/foot pieces.
+   Material = meshStandardMaterial so lighting works.
 ────────────────────────────────────────────────────────────────── */
 const PARTS = {
   head: {
@@ -58,167 +58,179 @@ const DEATH_OFFSETS = {
 }
 
 const INK   = '#1e1a17'
-const PAPER = '#ddd0b8'
+const PAPER = '#efe5d4'
 
-function PartMesh({ part, partKey, isDead }) {
-  const meshRef     = useRef()
-  const scaleRef    = useRef(0)
-  const appearedRef = useRef(false)
+function PartMesh({ partKey, isDead, isAppearing }) {
+  const meshRef = useRef()
+  const def = PARTS[partKey]
+  const death = DEATH_OFFSETS[partKey]
 
-  const { type, args, position, rotation } = part
-
-  useFrame((_, delta) => {
+  useFrame((state, delta) => {
     if (!meshRef.current) return
 
-    // Bounce pop-in
-    if (!appearedRef.current) {
-      appearedRef.current = true
-      meshRef.current.scale.setScalar(0.001)
-    }
-    if (scaleRef.current < 1) {
-      scaleRef.current = Math.min(1, scaleRef.current + delta * 10)
-      const s = scaleRef.current < 0.9
-        ? scaleRef.current
-        : 1 + Math.sin(scaleRef.current * Math.PI) * 0.08
-      meshRef.current.scale.setScalar(s)
-    }
-
-    // Death fly-apart
     if (isDead) {
-      const offsets = DEATH_OFFSETS[partKey]
-      if (offsets) {
-        meshRef.current.rotation.x = MathUtils.lerp(meshRef.current.rotation.x, rotation[0] + offsets.rot[0], delta * 3)
-        meshRef.current.rotation.y = MathUtils.lerp(meshRef.current.rotation.y, rotation[1] + offsets.rot[1], delta * 3)
-        meshRef.current.rotation.z = MathUtils.lerp(meshRef.current.rotation.z, rotation[2] + offsets.rot[2], delta * 3)
-        meshRef.current.position.x = MathUtils.lerp(meshRef.current.position.x, position[0] + offsets.pos[0], delta * 2.5)
-        meshRef.current.position.y = MathUtils.lerp(meshRef.current.position.y, position[1] - 1.2, delta * 2)
-      }
+      meshRef.current.position.x = MathUtils.damp(
+        meshRef.current.position.x,
+        def.position[0] + death.pos[0],
+        4,
+        delta
+      )
+      meshRef.current.position.y = MathUtils.damp(
+        meshRef.current.position.y,
+        def.position[1] + death.pos[1],
+        4,
+        delta
+      )
+      meshRef.current.rotation.x = MathUtils.damp(
+        meshRef.current.rotation.x,
+        def.rotation[0] + death.rot[0],
+        4,
+        delta
+      )
+      meshRef.current.rotation.z = MathUtils.damp(
+        meshRef.current.rotation.z,
+        def.rotation[2] + death.rot[2],
+        4,
+        delta
+      )
+    } else {
+      const t = state.clock.getElapsedTime()
+      const sway = Math.sin(t * 1.8 + (def.position[1] * 0.5)) * 0.015
+      meshRef.current.position.x = def.position[0] + sway
     }
   })
 
-  let geo
-  if (type === 'sphere') {
-    geo = <sphereGeometry args={args} />
-  } else if (type === 'cylinder') {
-    geo = <cylinderGeometry args={args} />
-  } else if (type === 'rounded-box') {
-    return (
-      <RoundedBox
-        ref={meshRef}
-        position={position}
-        rotation={rotation}
-        args={[args[0], args[1], args[2]]}
-        radius={args[4]}
-        smoothness={4}
-        castShadow
-        receiveShadow
-      >
-        <meshStandardMaterial color={PAPER} roughness={0.9} metalness={0} />
-        <Edges linewidth={2.5} threshold={20} color={INK} />
-      </RoundedBox>
-    )
+  const commonProps = {
+    castShadow: true,
+    receiveShadow: true,
   }
 
   return (
-    <mesh ref={meshRef} position={position} rotation={rotation} castShadow receiveShadow>
-      {geo}
-      <meshStandardMaterial color={PAPER} roughness={0.9} metalness={0} />
-      <Edges linewidth={2.5} threshold={20} color={INK} />
-    </mesh>
-  )
-}
-
-function Gallows() {
-  const beams = [
-    { pos: [0, -0.1, 0],    w: 3.0, h: 0.1, d: 1.0, rot: [0, 0, 0] },        // base
-    { pos: [-1.2, 2.0, 0],  w: 0.2, h: 4.2, d: 0.2, rot: [0, 0, 0] },        // vertical post
-    { pos: [-0.2, 4.0, 0],  w: 2.2, h: 0.2, d: 0.2, rot: [0, 0, 0] },        // horizontal beam
-    { pos: [-0.8, 3.4, 0],  w: 0.15, h: 1.2, d: 0.15, rot: [0, 0, -Math.PI / 4] }, // diagonal brace
-  ]
-
-  const rope = { pos: [0, 3.1, 0], w: 0.04, h: 1.8, d: 0.04 }
-
-  return (
-    <group position={[0, 0, 0]}>
-      {beams.map((b, i) => (
-        <mesh key={i} position={b.pos} rotation={b.rot} castShadow receiveShadow>
-          <boxGeometry args={[b.w, b.h, b.d]} />
-          <meshStandardMaterial color="#3a2e24" roughness={1} metalness={0} />
-          <Edges linewidth={2} threshold={15} color={INK} />
+    <group
+      ref={meshRef}
+      position={def.position}
+      rotation={def.rotation}
+    >
+      {def.type === 'sphere' && (
+        <mesh {...commonProps}>
+          <sphereGeometry args={def.args} />
+          <meshStandardMaterial
+            color={PAPER}
+            roughness={0.85}
+            metalness={0.05}
+          />
+          <Edges threshold={15} color={INK} lineWidth={2.5} />
+          {/* Fedora hat */}
+          <group position={[0, 0.32, 0]} rotation={[-0.1, 0, 0.05]}>
+            <mesh position={[0, 0.08, 0]} castShadow>
+              <cylinderGeometry args={[0.22, 0.25, 0.22, 16]} />
+              <meshStandardMaterial color="#1a1512" roughness={0.9} />
+            </mesh>
+            <mesh position={[0, 0.01, 0]} rotation={[0, 0, 0]}>
+              <cylinderGeometry args={[0.42, 0.42, 0.03, 20]} />
+              <meshStandardMaterial color="#1a1512" roughness={0.9} />
+            </mesh>
+            {/* Crimson ribbon */}
+            <mesh position={[0, 0.06, 0]}>
+              <cylinderGeometry args={[0.252, 0.252, 0.05, 16]} />
+              <meshStandardMaterial color="#8b0000" roughness={0.7} />
+            </mesh>
+          </group>
+          {/* Eyes */}
+          <mesh position={[-0.1, 0.05, 0.32]}>
+            <sphereGeometry args={[0.035, 8, 8]} />
+            <meshBasicMaterial color={INK} />
+          </mesh>
+          <mesh position={[0.1, 0.05, 0.32]}>
+            <sphereGeometry args={[0.035, 8, 8]} />
+            <meshBasicMaterial color={INK} />
+          </mesh>
         </mesh>
-      ))}
+      )}
 
-      {/* Rope */}
-      <mesh position={rope.pos} castShadow>
-        <cylinderGeometry args={[rope.w / 2, rope.w / 2, rope.h, 8]} />
-        <meshStandardMaterial color="#7a6040" roughness={1} metalness={0} />
-        <Edges linewidth={1.5} threshold={15} color={INK} />
-      </mesh>
+      {def.type === 'rounded-box' && (
+        <RoundedBox
+          args={[def.args[0], def.args[1], def.args[2]]}
+          radius={def.args[4]}
+          smoothness={def.args[3]}
+          {...commonProps}
+        >
+          <meshStandardMaterial
+            color={PAPER}
+            roughness={0.8}
+            metalness={0.05}
+          />
+          <Edges threshold={20} color={INK} lineWidth={2.5} />
+          {/* Trench coat lapels / tie */}
+          <group position={[0, 0.2, 0.13]}>
+            <mesh rotation={[0, 0, 0]}>
+              <planeGeometry args={[0.07, 0.35]} />
+              <meshBasicMaterial color="#8b0000" />
+            </mesh>
+            <mesh position={[-0.12, 0.1, 0.005]} rotation={[0, 0, 0.3]}>
+              <planeGeometry args={[0.06, 0.28]} />
+              <meshBasicMaterial color="#2c2825" />
+            </mesh>
+            <mesh position={[0.12, 0.1, 0.005]} rotation={[0, 0, -0.3]}>
+              <planeGeometry args={[0.06, 0.28]} />
+              <meshBasicMaterial color="#2c2825" />
+            </mesh>
+          </group>
+        </RoundedBox>
+      )}
 
-      {/* Rope knot loop around the neck area */}
-      <mesh position={[0, 2.0, 0]} rotation={[Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[0.2, 0.03, 8, 16]} />
-        <meshStandardMaterial color="#7a6040" roughness={1} metalness={0} />
-        <Edges linewidth={1.5} threshold={15} color={INK} />
-      </mesh>
+      {def.type === 'cylinder' && (
+        <mesh {...commonProps}>
+          <cylinderGeometry args={def.args} />
+          <meshStandardMaterial
+            color={PAPER}
+            roughness={0.85}
+            metalness={0.05}
+          />
+          <Edges threshold={25} color={INK} lineWidth={2} />
+        </mesh>
+      )}
     </group>
   )
 }
 
-/* ─── Main export ─────────────────────────────────────────────── */
 export default function CharacterModel({ wrongGuessCount = 0, isDead = false }) {
-  const groupRef  = useRef()
-  const timeRef   = useRef(0)
-  const shakeRef  = useRef(0)
-  const prevCount = useRef(wrongGuessCount)
+  const groupRef = useRef()
 
-  useFrame((_, delta) => {
+  useFrame((state, delta) => {
     if (!groupRef.current) return
-    timeRef.current += delta
+    const t = state.clock.getElapsedTime()
 
-    // Shake on new wrong guess
-    if (wrongGuessCount !== prevCount.current) {
-      prevCount.current = wrongGuessCount
-      shakeRef.current  = 0.5
-    }
-    if (shakeRef.current > 0) {
-      shakeRef.current -= delta * 3
-      groupRef.current.position.x = Math.sin(timeRef.current * 55) * shakeRef.current * 0.18
-    } else {
-      groupRef.current.position.x = 0
-    }
-
-    // Idle gentle sway
-    if (!isDead && wrongGuessCount > 0) {
-      groupRef.current.rotation.z = Math.sin(timeRef.current * 1.2) * 0.025
-    }
-
-    // Death collapse
     if (isDead) {
-      groupRef.current.rotation.z = MathUtils.lerp(groupRef.current.rotation.z, 0.45, delta * 1.8)
-      groupRef.current.position.y = MathUtils.lerp(groupRef.current.position.y, -0.7, delta * 1.8)
+      groupRef.current.position.y = MathUtils.damp(
+        groupRef.current.position.y,
+        -0.3,
+        3,
+        delta
+      )
+      groupRef.current.rotation.z = MathUtils.damp(
+        groupRef.current.rotation.z,
+        0.08,
+        3,
+        delta
+      )
+    } else {
+      const breathe = Math.sin(t * 2) * 0.02
+      groupRef.current.position.y = breathe
+      groupRef.current.rotation.y = Math.sin(t * 0.8) * 0.04
     }
   })
 
   return (
-    <>
-      {/* Gallows always shown */}
-      <Gallows />
-
-      {/* Character parts revealed progressively */}
-      <group ref={groupRef}>
-        {PARTS_ORDER.map((partKey, index) => {
-          if (index >= wrongGuessCount) return null
-          return (
-            <PartMesh
-              key={partKey}
-              part={PARTS[partKey]}
-              partKey={partKey}
-              isDead={isDead}
-            />
-          )
-        })}
-      </group>
-    </>
+    <group ref={groupRef}>
+      {PARTS_ORDER.slice(0, wrongGuessCount).map((partKey, index) => (
+        <PartMesh
+          key={partKey}
+          partKey={partKey}
+          isDead={isDead}
+          isAppearing={index === wrongGuessCount - 1}
+        />
+      ))}
+    </group>
   )
 }

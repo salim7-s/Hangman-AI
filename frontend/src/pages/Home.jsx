@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import { useAuth } from '../context/auth-context'
 import AuthModal from '../components/AuthModal'
+import InspectorGuide from '../components/InspectorGuide'
 
 const MODES = [
   { id: 'ai-vs-player',    label: 'Solo',       desc: 'Investigate AI.'      },
@@ -59,26 +60,36 @@ export default function Home() {
     <div className="app-shell relative flex min-h-screen flex-col">
 
       {/* ── Auth Bar ── */}
-      <div className="relative z-20 flex items-center justify-end gap-3 border-b-2 border-dashed border-[#2c2825] px-4 py-2 sm:px-8">
-        {user ? (
-          <>
-            <span className="text-xs font-bold uppercase tracking-widest opacity-70">
-              Agent: <span className="opacity-100">{user.username}</span>
-            </span>
-            <button onClick={logout} className="btn-secondary px-3 py-1 text-xs">
-              Sign Out
-            </button>
-          </>
-        ) : (
-          <>
-            <span className="text-xs font-bold uppercase tracking-widest opacity-60 hidden sm:inline">
-              Sign in to track wins on the leaderboard
-            </span>
-            <button onClick={() => setShowAuth(true)} className="btn-primary px-4 py-2 text-xs">
-              Sign In / Register
-            </button>
-          </>
-        )}
+      <div className="relative z-20 flex items-center justify-between border-b-2 border-dashed border-[#2c2825] px-4 py-2 sm:px-8">
+        <button
+          onClick={() => navigate('/inspectors')}
+          className="text-xs font-bold uppercase tracking-widest text-[#8b0000] hover:underline flex items-center gap-1.5 cursor-pointer"
+        >
+          <span>🕵️‍♂️</span>
+          <span>Inspectors Gallery</span>
+        </button>
+
+        <div className="flex items-center gap-3">
+          {user ? (
+            <>
+              <span className="text-xs font-bold uppercase tracking-widest opacity-70">
+                Agent: <span className="opacity-100">{user.username}</span>
+              </span>
+              <button onClick={logout} className="btn-secondary px-3 py-1 text-xs">
+                Sign Out
+              </button>
+            </>
+          ) : (
+            <>
+              <span className="text-xs font-bold uppercase tracking-widest opacity-60 hidden sm:inline">
+                Sign in to track wins on the leaderboard
+              </span>
+              <button onClick={() => setShowAuth(true)} className="btn-primary px-4 py-2 text-xs">
+                Sign In / Register
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {showAuth && <AuthModal onClose={() => setShowAuth(false)} />}
@@ -149,20 +160,25 @@ export default function Home() {
                 <div>
                   <p className="section-label">Investigation Type</p>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    {MODES.map((item) => (
-                      <button
-                        key={item.id}
-                        onClick={() => { setMode(item.id); setError(''); setWord('') }}
-                        className={`glass-card flex flex-col items-center justify-center p-3 sm:p-4 text-center ${
-                          mode === item.id
-                            ? 'glass-card-active shadow-none translate-y-0'
-                            : 'opacity-70 border-dashed hover:opacity-100'
-                        }`}
-                      >
-                        <span className="mb-0.5 text-sm font-bold uppercase tracking-widest sm:text-base">{item.label}</span>
-                        <span className="text-[11px] font-bold uppercase tracking-wider opacity-80">{item.desc}</span>
-                      </button>
-                    ))}
+                    {MODES.map((item) => {
+                      const isSelected = mode === item.id
+                      return (
+                        <button
+                          key={item.id}
+                          onClick={() => { setMode(item.id); setError(''); setWord('') }}
+                          className={`flex flex-col items-center justify-center p-3 sm:p-4 text-center border-2 transition-all cursor-pointer ${
+                            isSelected
+                              ? 'bg-[#2c2825] text-[#e3d5c1] border-[#2c2825] shadow-[4px_4px_0px_#8b0000]'
+                              : 'bg-transparent text-[#2c2825] border-dashed border-[#2c2825]/60 hover:bg-[#2c2825]/5 hover:border-solid'
+                          }`}
+                        >
+                          <span className="mb-0.5 text-sm font-bold uppercase tracking-widest sm:text-base">{item.label}</span>
+                          <span className={`text-[11px] font-bold uppercase tracking-wider ${isSelected ? 'text-[#e3d5c1]/80' : 'opacity-70'}`}>
+                            {item.desc}
+                          </span>
+                        </button>
+                      )
+                    })}
                   </div>
                 </div>
 
@@ -188,19 +204,22 @@ export default function Home() {
                 <div>
                   <p className="section-label">Threat Level (Difficulty)</p>
                   <div className="flex flex-col sm:flex-row gap-3">
-                    {DIFFICULTIES.map((item) => (
-                      <button
-                        key={item.id}
-                        onClick={() => setDifficulty(item.id)}
-                        className={`glass-card flex-1 py-3 text-center font-bold uppercase tracking-widest ${
-                          difficulty === item.id
-                            ? 'glass-card-active border-[#8b0000] text-[#8b0000]'
-                            : 'opacity-70 border-dashed hover:opacity-100'
-                        }`}
-                      >
-                        {item.label}
-                      </button>
-                    ))}
+                    {DIFFICULTIES.map((item) => {
+                      const isSelected = difficulty === item.id
+                      return (
+                        <button
+                          key={item.id}
+                          onClick={() => setDifficulty(item.id)}
+                          className={`flex-1 py-3 text-center font-bold uppercase tracking-widest border-2 transition-all cursor-pointer ${
+                            isSelected
+                              ? 'bg-[#2c2825] text-[#e3d5c1] border-[#2c2825] shadow-[4px_4px_0px_#8b0000]'
+                              : 'bg-transparent text-[#2c2825] border-dashed border-[#2c2825]/60 hover:bg-[#2c2825]/5 hover:border-solid'
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      )
+                    })}
                   </div>
                 </div>
 
@@ -223,6 +242,9 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      {/* ── Officer Dispatch Guide on Right ── */}
+      <InspectorGuide view={view} mode={mode} difficulty={difficulty} />
 
     </div>
   )

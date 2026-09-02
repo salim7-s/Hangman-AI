@@ -6,13 +6,14 @@ const ROWS = [
   ['Z', 'X', 'C', 'V', 'B', 'N', 'M'],
 ]
 
-export default function Keyboard({ guesses, wrongGuesses, onGuess, disabled }) {
+export default function Keyboard({ guesses, wrongGuesses, onGuess, disabled, eliminatedLetters = [] }) {
   const correctSet = new Set(guesses.filter((letter) => !wrongGuesses.includes(letter)))
   const wrongSet = new Set(wrongGuesses)
   const usedSet = new Set(guesses)
+  const eliminatedSet = new Set(eliminatedLetters)
 
   useEffect(() => {
-    const usedLetters = new Set(guesses)
+    const usedLetters = new Set([...guesses, ...eliminatedLetters])
 
     const handler = (event) => {
       const key = event.key.toUpperCase()
@@ -23,7 +24,7 @@ export default function Keyboard({ guesses, wrongGuesses, onGuess, disabled }) {
 
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [guesses, disabled, onGuess])
+  }, [guesses, disabled, onGuess, eliminatedLetters])
 
   return (
     <div className="mt-4 flex flex-col items-center gap-2 sm:gap-3 w-full">
@@ -33,16 +34,19 @@ export default function Keyboard({ guesses, wrongGuesses, onGuess, disabled }) {
             const isCorrect = correctSet.has(letter)
             const isWrong = wrongSet.has(letter)
             const isUsed = usedSet.has(letter)
+            const isEliminated = eliminatedSet.has(letter)
 
             // Typewriter key baseline styles (shrinkable, responsive sizing)
-            let btnClass = "h-8 w-8 sm:h-12 sm:w-12 rounded-full border-2 border-[#2c2825] text-sm sm:text-xl font-bold uppercase transition-all shadow-[2px_2px_0px_#2c2825] shrink flex items-center justify-center"
+            let btnClass = "h-8 w-8 sm:h-12 sm:w-12 rounded-full border-2 border-[#2c2825] text-sm sm:text-xl font-bold uppercase transition-all shadow-[2px_2px_0px_#2c2825] shrink flex items-center justify-center relative"
             
-            if (!isUsed && !disabled) {
-              btnClass += " bg-[#d4c5b0] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-none"
+            if (isEliminated) {
+              btnClass += " bg-[#8b1717]/20 text-[#8b1717] opacity-60 shadow-none border-dashed line-through decoration-2"
+            } else if (!isUsed && !disabled) {
+              btnClass += " bg-[#d4c5b0] hover:translate-y-[2px] hover:translate-x-[2px] hover:shadow-none cursor-pointer"
             } else if (isCorrect) {
               btnClass += " bg-[#2c2825] text-[#d4c5b0] shadow-none translate-y-[2px] translate-x-[2px]"
             } else if (isWrong) {
-              btnClass += " bg-[#e3d5c1] text-[#2c2825] opacity-50 shadow-none translate-y-[2px] translate-x-[2px] relative overflow-hidden"
+              btnClass += " bg-[#e3d5c1] text-[#2c2825] opacity-50 shadow-none translate-y-[2px] translate-x-[2px] overflow-hidden"
             } else {
               btnClass += " bg-[#e3d5c1] opacity-50 shadow-none translate-y-[2px] translate-x-[2px]"
             }
@@ -52,13 +56,19 @@ export default function Keyboard({ guesses, wrongGuesses, onGuess, disabled }) {
                 key={letter}
                 id={`key-${letter}`}
                 onClick={() => onGuess(letter)}
-                disabled={isUsed || disabled}
+                disabled={isUsed || isEliminated || disabled}
                 style={{ touchAction: 'manipulation' }}
                 className={btnClass}
+                title={isEliminated ? `Spider-Sense: '${letter}' is not in the word!` : undefined}
               >
                 {letter}
                 {isWrong && (
-                  <div className="absolute inset-0 bg-[#8b0000] opacity-80 w-full h-[2px] top-1/2 -mt-[1px] -rotate-45 pointer-events-none"></div>
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="w-full h-[2px] bg-[#8b0000] rotate-45 transform" />
+                  </div>
+                )}
+                {isEliminated && (
+                  <span className="absolute -top-1 -right-1 text-[9px] pointer-events-none">🕸️</span>
                 )}
               </button>
             )
