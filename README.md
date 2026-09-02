@@ -6,49 +6,12 @@ Live Demo: https://hangman-ai-orpin.vercel.app/
 
 ---
 
-## Architecture and Technology Stack
+## Technology Stack
 
-```mermaid
-flowchart TD
-    subgraph Client [Frontend: React + Vite SPA]
-        UI[Detective Game UI]
-        Canvas3D[Three.js 3D Gallows Scene]
-        SocketIO[Socket.IO Client]
-        Explainer[Live AI Reasoning Dashboard]
-    end
-
-    subgraph Server [Backend: Node.js + Express]
-        API[Express REST API]
-        SocketEngine[Socket.IO Multiplayer Engine]
-        Solver[Candidate Pruning & Solver Engine]
-        LanguageModel[Character N-Gram Language Model]
-        LearningStore[Adaptive Learning Store]
-    end
-
-    subgraph Data [Data and External Services]
-        Dictionary[(370k Word Corpus)]
-        DatamuseAPI[Datamuse Lexical API]
-        Database[(MongoDB Atlas / In-Memory Store)]
-    end
-
-    UI -->|REST Endpoints| API
-    UI --> Canvas3D
-    UI --> Explainer
-    SocketIO <-->|WebSockets| SocketEngine
-    API --> Solver
-    Solver --> LanguageModel
-    Solver --> Dictionary
-    Solver --> DatamuseAPI
-    Solver --> LearningStore
-    API --> Database
-```
-
-### Stack Details
-
-- Frontend: React 19, Vite, TailwindCSS, Three.js, Lucide Icons, Canvas Confetti.
-- Backend: Node.js, Express, Socket.IO, Zod schema validation.
-- AI Engine: Character-level N-Gram statistical language model (Order-2 -> Order-1 -> Positional -> Global backoff) with candidate entropy filtering.
-- Persistence and Fallback: MongoDB Atlas (Mongoose) with automatic in-memory fallback for guest sessions.
+- **Frontend:** React 19, Vite, TailwindCSS, Three.js (@react-three/fiber), Lucide Icons, Canvas Confetti.
+- **Backend:** Node.js, Express, Socket.IO, Zod schema validation.
+- **AI Linguistic Engine:** Character-level Statistical N-Gram Language Model (Order-2 -> Order-1 -> Positional -> Global backoff) with candidate entropy filtering and dynamic learning memory.
+- **Data & APIs:** 220k-word English dictionary, curated 1,968-word game dictionary, live Datamuse Lexical API, and MongoDB Atlas (with automatic in-memory fallback).
 
 ---
 
