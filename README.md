@@ -73,7 +73,6 @@ Latest local run on 2026-07-17 using `SAMPLE_SIZE=25`:
 | Medium | 25 | 88.0% | 8.88 | 2.96 | 45.81 ms |
 | Hard | 25 | 94.0% | 9.28 | 1.76 | 206.54 ms |
 
-Full methodology and results live in [docs/ai_benchmark.md](./docs/ai_benchmark.md).
 
 ## Local Development
 
@@ -154,11 +153,3 @@ frontend/
   src/pages/       Route-level screens
 docs/             Architecture, deployment, API, and benchmark docs
 ```
-
-## Documentation
-
-- [docs/README.md](./docs/README.md)
-- [docs/architecture_overview.md](./docs/architecture_overview.md)
-- [docs/api_reference.md](./docs/api_reference.md)
-- [docs/socket_multiplayer.md](./docs/socket_multiplayer.md)
-- [docs/ai_benchmark.md](./docs/ai_benchmark.md)
