@@ -31,6 +31,9 @@ function isOriginAllowed(origin) {
   return true
 }
 
+const app    = express()
+const server = http.createServer(app)
+
 const io     = new Server(server, {
   cors: {
     origin: (origin, callback) => callback(null, isOriginAllowed(origin)),
@@ -88,19 +91,14 @@ setupSocket(io)
 // ── Load dictionary (async, non-blocking) ─────────────────────────────────
 loadDictionary()
 
-// ── Connect DB then start server ──────────────────────────────────────────
+// ── Start server immediately (Render requires prompt port binding) ────────
+server.listen(PORT, () =>
+  console.log(`✅ Server running on http://localhost:${PORT}`)
+)
+
+// ── Connect DB (optional persistence; in-memory fallback active) ──────────
 if (process.env.MONGO_URI) {
-  connectDB().then(() => {
-    server.listen(PORT, () =>
-      console.log(`✅ Server running on http://localhost:${PORT}`)
-    )
-  }).catch((err) => {
-    console.error('❌ DB connection failed:', err.message)
-    process.exit(1)
-  })
+  connectDB()
 } else {
   console.warn('⚠️  No MONGO_URI — running in-memory (data will not persist)')
-  server.listen(PORT, () =>
-    console.log(`✅ Server running on http://localhost:${PORT}`)
-  )
 }

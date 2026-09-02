@@ -3,7 +3,7 @@ import { getApiBaseUrl } from './runtimeConfig'
 
 const api = axios.create({
   baseURL: getApiBaseUrl(),
-  timeout: 10000,
+  timeout: 30000,
 })
 
 // Attach JWT to every request if present

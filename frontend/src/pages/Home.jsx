@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import { useAuth } from '../context/auth-context'
@@ -26,6 +26,11 @@ export default function Home() {
   const [loading, setLoading]       = useState(false)
   const [error, setError]           = useState('')
   const [showAuth, setShowAuth]     = useState(false)
+
+  // Pre-warm backend on page load so cold-starts finish while the user navigates menus
+  useEffect(() => {
+    api.get('/api/health').catch(() => {})
+  }, [])
 
   const needsWord = mode === 'player-vs-ai' || mode === 'player-vs-player'
 
