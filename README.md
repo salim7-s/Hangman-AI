@@ -26,10 +26,23 @@ Live Demo: https://hangman-ai-orpin.vercel.app/
 
 ---
 
+## Quick Start & Gameplay Guide
+
+- **Solo Mode (You vs AI):**
+  Click **Open Case File** -> Select **Solo** -> Choose difficulty (Rookie, Detective, or Chief). Click letters on the typewriter to solve the secret word before 6 strikes.
+
+- **Reverse Mode (AI Solves Your Word):**
+  Click **Open Case File** -> Select **Reverse** -> Enter any word, slang, or proper noun (e.g. `DIDDY`). Watch the AI deduce your word turn-by-turn. Click **View AI Explainer** to see real-time letter probability scores and candidate lists.
+
+- **Multiplayer Mode (Live 1v1 Rooms):**
+  Click **Multiplayer** -> Create a room or share a 6-character room code to challenge a friend live over WebSockets with real-time turn synchronization.
+
+---
+
 ## AI Solver and Linguistic Engine
 
 1. Character-Level N-Gram Context Model:
-   Trained on a 370,000+ word corpus at server boot. Uses bi-gram and tri-gram character contexts to predict missing letters based on neighboring revealed letters (e.g. predicting U after Q, or identifying patterns like TH, ING, ED).
+   Trained on a 220,000-word corpus at server boot. Uses bi-gram and tri-gram character contexts to predict missing letters based on neighboring revealed letters (e.g. predicting U after Q, or identifying patterns like TH, ING, ED).
 
 2. Positional Frequency Matrices:
    Instead of flat global letter frequency, the AI computes exact slot likelihoods per word length (analyzing letter frequency at position 1 vs position 5).
