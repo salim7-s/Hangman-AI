@@ -61,8 +61,8 @@ function getLearningPenalty(letter, wordLength) {
   const key = String(wordLength)
   const penalty = learningStore[key]?.[letter] || 0
   if (!penalty) return 1.0
-  // Dynamic adaptation: 1 loss = 35% drop, 2 losses = 70% drop, 3+ losses = 95% drop
-  return Math.max(1.0 - (penalty * 0.35), 0.05)
+  // Dynamic adaptation: 1 loss = 60% drop, 2+ losses = 95% drop (immediately forces AI to pivot)
+  return Math.max(1.0 - (penalty * 0.6), 0.05)
 }
 
 loadLearning()
@@ -360,23 +360,25 @@ function aiGuessMedium(candidates, patternChars, wordLen, guessedSet, fallbackLe
   }
 
   const frequency = {}
+  let totalBlankCount = 0
   for (const word of candidates) {
-    const seen = new Set()
-    for (const char of word) {
-      if (!guessedSet.has(char) && !seen.has(char)) {
-        frequency[char] = (frequency[char] || 0) + 1
-        seen.add(char)
+    for (let i = 0; i < wordLen; i++) {
+      if (patternChars[i] === '_') {
+        const char = word[i]
+        if (!guessedSet.has(char)) {
+          frequency[char] = (frequency[char] || 0) + 1
+          totalBlankCount++
+        }
       }
     }
   }
 
-  const n = candidates.length
   let bestLetter = null
   let bestScore = -1
   for (const [letter, count] of Object.entries(frequency)) {
-    const candidateScore = count / n
+    const candidateScore = totalBlankCount > 0 ? count / totalBlankCount : 0
     const posBoost = positionalScores[letter] || 0
-    const blended = (candidateScore * 0.8 + posBoost * 0.2) * getLearningPenalty(letter, wordLen)
+    const blended = (candidateScore * 0.85 + posBoost * 0.15) * getLearningPenalty(letter, wordLen)
     if (blended > bestScore) {
       bestScore = blended
       bestLetter = letter
@@ -411,12 +413,15 @@ function aiGuessHard(candidates, wordLen, guessedSet, fallbackLetters, patternCh
   }
 
   const freq = {}
+  let totalBlankCount = 0
   for (const word of candidates) {
-    const seen = new Set()
-    for (const char of word) {
-      if (!guessedSet.has(char) && !seen.has(char)) {
-        freq[char] = (freq[char] || 0) + 1
-        seen.add(char)
+    for (let i = 0; i < wordLen; i++) {
+      if (patternChars[i] === '_') {
+        const char = word[i]
+        if (!guessedSet.has(char)) {
+          freq[char] = (freq[char] || 0) + 1
+          totalBlankCount++
+        }
       }
     }
   }
@@ -428,7 +433,7 @@ function aiGuessHard(candidates, wordLen, guessedSet, fallbackLetters, patternCh
   let best = null
   let bestScore = -1
   for (const [letter, count] of Object.entries(freq)) {
-    const candidateScore = count / n
+    const candidateScore = totalBlankCount > 0 ? count / totalBlankCount : 0
     const posBoost = positionalScores[letter] || 0
     const blended = (candidateScore * 0.9 + posBoost * 0.1) * getLearningPenalty(letter, wordLen)
     if (blended > bestScore) {
