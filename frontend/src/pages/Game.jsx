@@ -31,7 +31,7 @@ export default function Game() {
   const [loading, setLoading] = useState(false)
   const [aiThinking, setAiThinking] = useState(false)
   const [error, setError] = useState('')
-  const [mode, setMode] = useState(init?.mode || '')
+  const mode = init?.mode || ''
 
   const { recordWin, recordLoss, streak: initialStreak, bestStreak: initialBest } = useStreak()
   const [streakSnapshot, setStreakSnapshot] = useState({ streak: initialStreak, bestStreak: initialBest })
@@ -41,34 +41,11 @@ export default function Game() {
   // FIX 1 — prevents AI double-guess race condition
   const aiHasGuessedRef = useRef(false)
 
-  const [difficulty, setDifficulty] = useState(init?.difficulty || 'medium')
+  const difficulty = init?.difficulty || 'medium'
   const [explanation, setExplanation] = useState(null)
   const [showExplanation, setShowExplanation] = useState(false)
   const [aiUsedWeb, setAiUsedWeb] = useState(false)
 
-  // Reset state when navigating to a new game ID
-  useEffect(() => {
-    if (init) {
-      setMaskedWord(init.maskedWord || '')
-      setGuesses([])
-      setWrongGuesses([])
-      setAttemptsLeft(init.attemptsLeft ?? 6)
-      setStatus('ongoing')
-      setWord('')
-      setAiGuess(null)
-      setCandidateCount(null)
-      setWordNotInDict(false)
-      setLoading(false)
-      setAiThinking(false)
-      setError('')
-      setMode(init.mode || '')
-      setDifficulty(init.difficulty || 'medium')
-      setExplanation(null)
-      setShowExplanation(false)
-      setAiUsedWeb(false)
-      aiHasGuessedRef.current = false
-    }
-  }, [init])
 
   useEffect(() => {
     if (mode !== 'player-vs-ai' || status !== 'ongoing' || !maskedWord) return

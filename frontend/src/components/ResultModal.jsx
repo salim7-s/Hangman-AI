@@ -5,32 +5,21 @@ export default function ResultModal({ status, word, streak, bestStreak, onPlayAg
   // In other modes, the player wins if the word is fully guessed (status === 'won')
   const won = mode === 'player-vs-ai' ? status === 'lost' : status === 'won'
 
-  // Custom texts based on mode and win condition
-  let title = ''
-  let subtitle = ''
-  let stampText = ''
+  const title = mode === 'player-vs-ai'
+    ? (won ? 'Suspect Escaped' : 'Suspect Captured')
+    : (won ? 'Suspect Captured' : 'Suspect Escaped')
 
-  if (mode === 'player-vs-ai') {
-    if (won) {
-      title = 'Suspect Escaped'
-      subtitle = 'Excellent work, informant. The AI detective failed to deduce your word.'
-      stampText = 'ESCAPED'
-    } else {
-      title = 'Suspect Captured'
-      subtitle = 'The AI detective solved your secret word. The case is closed.'
-      stampText = 'BUSTED'
-    }
-  } else {
-    if (won) {
-      title = 'Suspect Captured'
-      subtitle = 'Excellent work, detective. The evidence was decisive.'
-      stampText = 'SOLVED'
-    } else {
-      title = 'Suspect Escaped'
-      subtitle = 'You failed to deduce the evidence in time. The trail went cold.'
-      stampText = 'FAILED'
-    }
-  }
+  const subtitle = mode === 'player-vs-ai'
+    ? (won
+      ? 'Excellent work, informant. The AI detective failed to deduce your word.'
+      : 'The AI detective solved your secret word. The case is closed.')
+    : (won
+      ? 'Excellent work, detective. The evidence was decisive.'
+      : 'You failed to deduce the evidence in time. The trail went cold.')
+
+  const stampText = mode === 'player-vs-ai'
+    ? (won ? 'ESCAPED' : 'BUSTED')
+    : (won ? 'SOLVED' : 'FAILED')
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-[#2c2825]/80 px-3 py-3 backdrop-blur-sm sm:flex sm:items-center sm:justify-center sm:px-4">
