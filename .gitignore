@@ -25,9 +25,6 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 
-# Documentation (kept locally)
-docs/
-
 # Editor files
 .vscode/settings.json
 .idea/
@@ -44,3 +41,4 @@ backend/data/ai_learning.json
 # Presentation assets
 ppt images/
 *.zip
+to_delete/
