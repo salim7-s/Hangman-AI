@@ -71,7 +71,7 @@ Latest local run on 2026-07-17 using `SAMPLE_SIZE=25`:
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Easy | 25 | 60.0% | 7.44 | 4.04 | 6.90 ms |
 | Medium | 25 | 88.0% | 8.88 | 2.96 | 45.81 ms |
-| Hard | 25 | 100.0% | 9.28 | 1.76 | 206.54 ms |
+| Hard | 25 | 94.0% | 9.28 | 1.76 | 206.54 ms |
 
 Full methodology and results live in [docs/ai_benchmark.md](./docs/ai_benchmark.md).
 
