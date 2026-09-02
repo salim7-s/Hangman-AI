@@ -43,3 +43,4 @@ backend/data/ai_learning.json
 
 # Presentation assets
 ppt images/
+*.zip

@@ -1,5 +1,6 @@
 const fs = require('fs')
 const path = require('path')
+const { buildContextModel, scoreNgram } = require('./ngram_model')
 
 const RAW_WORDS_PATH = path.join(__dirname, '..', 'data', 'words_alpha.txt')
 const DEFAULT_GAME_WORDS_PATH = path.join(__dirname, '..', 'data', 'words_game_curated.txt')
@@ -10,14 +11,11 @@ const MIN_GAME_WORD_LENGTH = 4
 const MAX_GAME_WORD_LENGTH = 10
 const GAME_DIFFICULTY_RANGES = {
   easy: [4, 5],
-  medium: [6, 8],
-  hard: [9, 10],
+  medium: [6, 7],
+  hard: [8, 10],
 }
 
 // ── Persistent Learning Store ─────────────────────────────────────────────────
-// Tracks which letters the AI wasted on wrong guesses, keyed by word length.
-// Penalties decay over time so old mistakes don't dominate forever.
-// Format: { "4": { "E": 3.2, "T": 1.5 }, "6": { "Q": 2.0 } }
 let learningStore = {}
 
 function loadLearning() {
@@ -25,12 +23,16 @@ function loadLearning() {
     if (fs.existsSync(LEARNING_PATH)) {
       learningStore = JSON.parse(fs.readFileSync(LEARNING_PATH, 'utf-8'))
     }
-  } catch { learningStore = {} }
+  } catch {
+    learningStore = {}
+  }
 }
 
 function saveLearning() {
   if (process.env.NODE_ENV === 'test') return
-  try { fs.writeFileSync(LEARNING_PATH, JSON.stringify(learningStore, null, 2)) } catch {}
+  try {
+    fs.writeFileSync(LEARNING_PATH, JSON.stringify(learningStore, null, 2))
+  } catch {}
 }
 
 function __setLearningForTests(data) {
@@ -41,16 +43,13 @@ function __resetLearningForTests() {
   learningStore = {}
 }
 
-
-// Called after each LOSS to record which letters were wasted
 function recordLoss(wordLength, wrongLetters) {
   const key = String(wordLength)
   if (!learningStore[key]) learningStore[key] = {}
   for (const letter of wrongLetters) {
-    // Accumulate penalty; each loss adds 1.0, decayed by 0.9 on re-access
-    learningStore[key][letter] = (learningStore[key][letter] || 0) + 1.0
+    const upper = letter.toUpperCase()
+    learningStore[key][upper] = (learningStore[key][upper] || 0) + 1.0
   }
-  // Decay ALL existing penalties by 5% so old data fades
   for (const l of Object.keys(learningStore[key])) {
     learningStore[key][l] *= 0.95
     if (learningStore[key][l] < 0.1) delete learningStore[key][l]
@@ -58,12 +57,11 @@ function recordLoss(wordLength, wrongLetters) {
   saveLearning()
 }
 
-// Returns a penalty multiplier for a letter given word length (1.0 = no penalty)
 function getLearningPenalty(letter, wordLength) {
   const key = String(wordLength)
   const penalty = learningStore[key]?.[letter] || 0
   if (!penalty) return 1.0
-  // Dynamic adaptation: 1 loss = 35% drop, 2 losses = 70% drop, 3+ losses = 95% drop (forces AI to pivot to alternative letters)
+  // Dynamic adaptation: 1 loss = 35% drop, 2 losses = 70% drop, 3+ losses = 95% drop
   return Math.max(1.0 - (penalty * 0.35), 0.05)
 }
 
@@ -78,6 +76,10 @@ let aiPoolWords = []
 let rawWordsByLength = new Map()
 let gameplayWordsByLength = new Map()
 let aiWordsByLength = new Map()
+let positionalFreqByLength = new Map()
+let globalLetterFreq = {}
+let contextModel = { 2: new Map(), 1: new Map() }
+
 let dictionaryMeta = {
   aiPoolMode: AI_POOL_MODE,
   blocklistSize: 0,
@@ -92,14 +94,31 @@ function normalizeWords(words) {
 
 function indexWordsByLength(words) {
   const index = new Map()
-
   for (const word of words) {
     const bucket = index.get(word.length) || []
     bucket.push(word)
     index.set(word.length, bucket)
   }
-
   return index
+}
+
+function buildPositionalFrequency(wordsByLength) {
+  const result = new Map()
+  const global = {}
+
+  for (const [length, words] of wordsByLength.entries()) {
+    const positions = Array.from({ length }, () => ({}))
+    for (const word of words) {
+      for (let i = 0; i < length; i++) {
+        const ch = word[i]
+        positions[i][ch] = (positions[i][ch] || 0) + 1
+        global[ch] = (global[ch] || 0) + 1
+      }
+    }
+    result.set(length, positions)
+  }
+
+  return { positional: result, global }
 }
 
 async function readWordList(filePath) {
@@ -108,7 +127,6 @@ async function readWordList(filePath) {
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter((line) => line && !line.startsWith('#'))
-
   return normalizeWords(lines)
 }
 
@@ -116,9 +134,7 @@ async function readOptionalWordList(filePath) {
   try {
     return await readWordList(filePath)
   } catch (error) {
-    if (error.code === 'ENOENT') {
-      return null
-    }
+    if (error.code === 'ENOENT') return null
     throw error
   }
 }
@@ -144,30 +160,18 @@ function buildGameplayWordList(sourceWords, blockedWords = new Set()) {
 function setRawWords(words) {
   rawWords = words
   rawWordsByLength = indexWordsByLength(words)
-}
-
-function evaluateWordDifficulty(word) {
-  const commonLetters = new Set(['E', 'T', 'A', 'O', 'I', 'N', 'S', 'R', 'H'])
-  let commonCount = 0
-  for (const char of word) {
-    if (commonLetters.has(char)) commonCount++
-  }
-  const commonRatio = commonCount / word.length
-  const uniqueCount = new Set(word).size
-  
-  // Heuristic difficulty score (higher score = easier to guess)
-  const score = uniqueCount * 0.4 + commonRatio * 3.0 + word.length * 0.3
-  return score
+  const { positional, global } = buildPositionalFrequency(rawWordsByLength)
+  positionalFreqByLength = positional
+  globalLetterFreq = global
+  contextModel = buildContextModel(words)
 }
 
 function setGameplayWords(words, source) {
   gameplayWords = words
   gameplayWordsByLength = indexWordsByLength(words)
-
   easyWords = gameplayWords.filter((w) => w.length >= 4 && w.length <= 5)
   mediumWords = gameplayWords.filter((w) => w.length >= 6 && w.length <= 7)
   hardWords = gameplayWords.filter((w) => w.length >= 8 && w.length <= 10)
-
   dictionaryMeta.gameplaySource = source
 }
 
@@ -226,26 +230,10 @@ async function loadDictionary() {
     )
   } catch (err) {
     console.error('Could not load dictionary:', err.message)
-
     const fallbackRawWords = [
-      'PLAY',
-      'GAME',
-      'WORD',
-      'FIND',
-      'CLUE',
-      'HINT',
-      'HANG',
-      'OPEN',
-      'PUZZLE',
-      'LETTER',
-      'GENIUS',
-      'RIDDLE',
-      'SOLVER',
-      'MYSTERY',
-      'CAPTAIN',
-      'TREASURE',
+      'PLAY', 'GAME', 'WORD', 'FIND', 'CLUE', 'HINT', 'HANG', 'OPEN',
+      'PUZZLE', 'LETTER', 'GENIUS', 'RIDDLE', 'SOLVER', 'MYSTERY', 'CAPTAIN', 'TREASURE',
     ]
-
     applyDictionaryState({
       raw: fallbackRawWords,
       gameplay: buildGameplayWordList(fallbackRawWords),
@@ -295,39 +283,80 @@ function getDictionaryStats() {
   }
 }
 
-function aiGuessEasy(candidates, guessedSet, fallbackLetters, wordLen) {
-  // Easy: use global English letter frequency, ignore candidates.
-  // This makes it feel casual — the AI doesn't "think hard".
-  // Apply learning penalty to the frequency values to deprioritize consistently failed letters.
-  const ENGLISH_FREQ = ['E','T','A','O','I','N','S','R','H','L','D','C','U','M','F','P','G','W','Y','B','V','K','X','J','Q','Z']
-  
+function scorePositional(patternChars, guessedSet, wordLen) {
+  const positions = positionalFreqByLength.get(wordLen)
+  const scores = {}
+
+  if (positions) {
+    for (let i = 0; i < wordLen; i++) {
+      if (patternChars[i] !== '_') continue
+      const freqAtPos = positions[i] || {}
+      const total = Object.values(freqAtPos).reduce((a, b) => a + b, 0) || 1
+      for (const [letter, count] of Object.entries(freqAtPos)) {
+        if (guessedSet.has(letter)) continue
+        scores[letter] = (scores[letter] || 0) + count / total
+      }
+    }
+  }
+  return scores
+}
+
+function scoreGlobal(guessedSet) {
+  const scores = {}
+  const totalGlobal = Object.values(globalLetterFreq).reduce((a, b) => a + b, 0) || 1
+  for (const [letter, count] of Object.entries(globalLetterFreq)) {
+    if (guessedSet.has(letter)) continue
+    scores[letter] = count / totalGlobal
+  }
+  return scores
+}
+
+function scoreContext(patternChars, guessedSet, wordLen) {
+  return scoreNgram(
+    contextModel,
+    patternChars,
+    guessedSet,
+    (pc, gs, wl) => scorePositional(pc, gs, wl),
+    (gs) => scoreGlobal(gs)
+  )
+}
+
+// ── EASY: positional / n-gram frequency with learning penalty ──────────────
+function aiGuessEasy(guessedSet, fallbackLetters, wordLen, patternChars) {
+  const scores = scoreContext(patternChars, guessedSet, wordLen)
   let bestLetter = null
   let bestScore = -1
-  
-  for (let i = 0; i < ENGLISH_FREQ.length; i++) {
-    const letter = ENGLISH_FREQ[i]
-    if (guessedSet.has(letter)) continue
-    
-    const indexScore = 26 - i
-    const score = indexScore * getLearningPenalty(letter, wordLen)
-    if (score > bestScore) {
-      bestScore = score
+  for (const [letter, score] of Object.entries(scores)) {
+    const penalized = score * getLearningPenalty(letter, wordLen)
+    if (penalized > bestScore) {
+      bestScore = penalized
       bestLetter = letter
     }
   }
-  
-  return bestLetter || fallbackLetters.find(l => !guessedSet.has(l)) || 'E'
+  return bestLetter || fallbackLetters.find((l) => !guessedSet.has(l)) || 'E'
 }
 
-// ── MEDIUM: candidate letter frequency + learning ────────────────────────────
+// ── MEDIUM: candidate frequency blended with positional n-gram context ─────
 function aiGuessMedium(candidates, patternChars, wordLen, guessedSet, fallbackLetters) {
-  if (candidates.length === 0) {
-    return fallbackLetters.find(l => !guessedSet.has(l)) || 'E'
-  }
   if (candidates.length === 1) {
     for (const char of candidates[0]) {
       if (!guessedSet.has(char)) return char
     }
+  }
+
+  const positionalScores = scoreContext(patternChars, guessedSet, wordLen)
+
+  if (candidates.length === 0) {
+    let best = null
+    let bestScore = -1
+    for (const [letter, score] of Object.entries(positionalScores)) {
+      const penalized = score * getLearningPenalty(letter, wordLen)
+      if (penalized > bestScore) {
+        bestScore = penalized
+        best = letter
+      }
+    }
+    return best || fallbackLetters.find((l) => !guessedSet.has(l)) || 'E'
   }
 
   const frequency = {}
@@ -342,32 +371,45 @@ function aiGuessMedium(candidates, patternChars, wordLen, guessedSet, fallbackLe
   }
 
   const n = candidates.length
-  let bestLetter = null, bestScore = -1
+  let bestLetter = null
+  let bestScore = -1
   for (const [letter, count] of Object.entries(frequency)) {
-    // Apply learning penalty — letters frequently wasted in past games score lower
-    const score = (count / n) * getLearningPenalty(letter, wordLen)
-    if (score > bestScore) { bestScore = score; bestLetter = letter }
+    const candidateScore = count / n
+    const posBoost = positionalScores[letter] || 0
+    const blended = (candidateScore * 0.8 + posBoost * 0.2) * getLearningPenalty(letter, wordLen)
+    if (blended > bestScore) {
+      bestScore = blended
+      bestLetter = letter
+    }
   }
 
-  return bestLetter || fallbackLetters.find(l => !guessedSet.has(l)) || 'E'
+  return bestLetter || fallbackLetters.find((l) => !guessedSet.has(l)) || 'E'
 }
 
-// ── HARD: pure candidate frequency (optimal for hangman with limited lives) ──
-// For each unguessed letter, count how many candidate words contain it.
-// Pick the one with the highest count — this maximises the probability that
-// the next guess is CORRECT, which is what matters when wrong guesses cost lives.
-// Entropy is theoretically elegant but trades correct guesses for information gain,
-// wasting lives on "splitter" letters that never appear in the actual word.
-function aiGuessHard(candidates, wordLen, guessedSet, fallbackLetters) {
+// ── HARD: candidate frequency with positional booster and learning penalty ───
+function aiGuessHard(candidates, wordLen, guessedSet, fallbackLetters, patternChars) {
   const n = candidates.length
-  if (n === 0) return fallbackLetters.find(l => !guessedSet.has(l)) || 'E'
   if (n === 1) {
     for (const char of candidates[0]) {
       if (!guessedSet.has(char)) return char
     }
   }
 
-  // Build letter frequency across all candidates
+  const positionalScores = scoreContext(patternChars, guessedSet, wordLen)
+
+  if (n === 0) {
+    let best = null
+    let bestScore = -1
+    for (const [letter, score] of Object.entries(positionalScores)) {
+      const penalized = score * getLearningPenalty(letter, wordLen)
+      if (penalized > bestScore) {
+        bestScore = penalized
+        best = letter
+      }
+    }
+    return best || fallbackLetters.find((l) => !guessedSet.has(l)) || 'E'
+  }
+
   const freq = {}
   for (const word of candidates) {
     const seen = new Set()
@@ -380,54 +422,51 @@ function aiGuessHard(candidates, wordLen, guessedSet, fallbackLetters) {
   }
 
   if (Object.keys(freq).length === 0) {
-    return fallbackLetters.find(l => !guessedSet.has(l)) || 'E'
+    return fallbackLetters.find((l) => !guessedSet.has(l)) || 'E'
   }
 
-  // Pick the letter with highest frequency, penalised by past losses
-  let best = null, bestScore = -1
+  let best = null
+  let bestScore = -1
   for (const [letter, count] of Object.entries(freq)) {
-    const score = (count / n) * getLearningPenalty(letter, wordLen)
-    if (score > bestScore) { bestScore = score; best = letter }
+    const candidateScore = count / n
+    const posBoost = positionalScores[letter] || 0
+    const blended = (candidateScore * 0.9 + posBoost * 0.1) * getLearningPenalty(letter, wordLen)
+    if (blended > bestScore) {
+      bestScore = blended
+      best = letter
+    }
   }
 
-  return best || fallbackLetters.find(l => !guessedSet.has(l)) || 'E'
+  return best || fallbackLetters.find((l) => !guessedSet.has(l)) || 'E'
 }
-
 
 const datamuse_cache = new Map()
 
 async function fetchDatamuseCandidates(patternChars, wrongLetters) {
-  const sp = patternChars.map((ch) => ch === '_' ? '?' : ch.toLowerCase()).join('')
+  const sp = patternChars.map((ch) => (ch === '_' ? '?' : ch.toLowerCase())).join('')
   const cacheKey = `${sp}|${wrongLetters.slice().sort().join('')}`
-
   if (datamuse_cache.has(cacheKey)) return datamuse_cache.get(cacheKey)
 
   try {
-    const keyParam = process.env.DATAMUSE_API_KEY
-      ? `&key=${process.env.DATAMUSE_API_KEY}`
-      : ''
+    const keyParam = process.env.DATAMUSE_API_KEY ? `&key=${process.env.DATAMUSE_API_KEY}` : ''
     const url = `https://api.datamuse.com/words?sp=${encodeURIComponent(sp)}&max=500${keyParam}`
-    
     const res = await fetch(url, { signal: AbortSignal.timeout(2000) })
     if (!res.ok) return []
 
     const data = await res.json()
     const wrongSet = new Set(wrongLetters.map((l) => l.toUpperCase()))
-
     const candidates = data
       .map((entry) => entry.word.toUpperCase().replace(/\s+/g, ''))
-      .filter((word) =>
-        word.length === patternChars.length &&
-        /^[A-Z]+$/.test(word) &&
-        ![...wrongSet].some((bad) => word.includes(bad))
+      .filter(
+        (word) =>
+          word.length === patternChars.length &&
+          /^[A-Z]+$/.test(word) &&
+          ![...wrongSet].some((bad) => word.includes(bad))
       )
 
     datamuse_cache.set(cacheKey, candidates)
     const cacheTimer = setTimeout(() => datamuse_cache.delete(cacheKey), 5 * 60 * 1000)
-    if (cacheTimer.unref) {
-      cacheTimer.unref()
-    }
-
+    if (cacheTimer.unref) cacheTimer.unref()
     return candidates
   } catch (err) {
     console.error('Datamuse API error:', err.message)
@@ -441,47 +480,32 @@ async function aiGuess(pattern, wrongLetters, guessedLetters, difficulty = 'medi
     'P', 'F', 'M', 'W', 'Y', 'B', 'G', 'V', 'K', 'Q', 'J', 'X', 'Z',
   ]
 
-  if (!Array.isArray(wrongLetters)) {
-    wrongLetters = wrongLetters ? [...wrongLetters] : []
-  }
-  if (!Array.isArray(guessedLetters)) {
-    guessedLetters = guessedLetters ? [...guessedLetters] : []
-  }
+  if (!Array.isArray(wrongLetters)) wrongLetters = wrongLetters ? [...wrongLetters] : []
+  if (!Array.isArray(guessedLetters)) guessedLetters = guessedLetters ? [...guessedLetters] : []
 
-  const patternChars = pattern.split(' ')
+  const patternChars = pattern.split(' ').map((ch) => (ch === '_' ? '_' : ch.toUpperCase()))
+  wrongLetters = wrongLetters.map((l) => l.toUpperCase())
   const wordLen = patternChars.length
-  
+
   const poolMode = mode === 'player-vs-ai' ? 'full' : 'game'
   const activeWordsByLength = poolMode === 'full' ? rawWordsByLength : gameplayWordsByLength
   const sourceWords = activeWordsByLength.get(wordLen) || []
 
   let candidates = sourceWords.filter((word) => {
     for (let index = 0; index < wordLen; index++) {
-      if (patternChars[index] !== '_' && word[index] !== patternChars[index]) {
-        return false
-      }
+      if (patternChars[index] !== '_' && word[index] !== patternChars[index]) return false
     }
-
     for (const wrongLetter of wrongLetters) {
-      if (word.includes(wrongLetter)) {
-        return false
-      }
+      if (word.includes(wrongLetter)) return false
     }
-
     return true
   })
 
   let effectiveCandidates = candidates
   let usedExternalApi = false
 
-  // In player-vs-ai (Reverse) mode, run local filter + Datamuse API in parallel
-  // so we cover slang, names, and brand words the player may have typed.
-  // In ai-vs-player (Solo) mode, the curated gameplay pool is sufficient — skip the API.
   if (mode === 'player-vs-ai' && !dictionaryMeta.gameplaySource.startsWith('test')) {
-    const externalPromise = fetchDatamuseCandidates(patternChars, wrongLetters)
-
-    // Both results are now ready — local was already computed above
-    const external = await externalPromise
+    const external = await fetchDatamuseCandidates(patternChars, wrongLetters)
     if (external.length > 0) {
       const merged = new Set([...candidates, ...external])
       effectiveCandidates = [...merged]
@@ -495,11 +519,10 @@ async function aiGuess(pattern, wrongLetters, guessedLetters, difficulty = 'medi
   const wordInDictionary = candidates.length > 0 || !isFirstGuess
 
   let letter = 'E'
-
   if (difficulty === 'easy') {
-    letter = aiGuessEasy(effectiveCandidates, guessedSet, fallbackLetters, wordLen)
+    letter = aiGuessEasy(guessedSet, fallbackLetters, wordLen, patternChars)
   } else if (difficulty === 'hard') {
-    letter = aiGuessHard(effectiveCandidates, wordLen, guessedSet, fallbackLetters)
+    letter = aiGuessHard(effectiveCandidates, wordLen, guessedSet, fallbackLetters, patternChars)
   } else {
     letter = aiGuessMedium(effectiveCandidates, patternChars, wordLen, guessedSet, fallbackLetters)
   }
@@ -508,33 +531,24 @@ async function aiGuess(pattern, wrongLetters, guessedLetters, difficulty = 'medi
 }
 
 async function aiExplain(pattern, wrongLetters, guessedLetters, difficulty = 'medium', mode = 'ai-vs-player') {
-  if (!Array.isArray(wrongLetters)) {
-    wrongLetters = wrongLetters ? [...wrongLetters] : []
-  }
-  if (!Array.isArray(guessedLetters)) {
-    guessedLetters = guessedLetters ? [...guessedLetters] : []
-  }
+  if (!Array.isArray(wrongLetters)) wrongLetters = wrongLetters ? [...wrongLetters] : []
+  if (!Array.isArray(guessedLetters)) guessedLetters = guessedLetters ? [...guessedLetters] : []
 
-  const patternChars = pattern.split(' ')
+  const patternChars = pattern.split(' ').map((ch) => (ch === '_' ? '_' : ch.toUpperCase()))
+  wrongLetters = wrongLetters.map((l) => l.toUpperCase())
   const wordLen = patternChars.length
-  
+
   const poolMode = mode === 'player-vs-ai' ? 'full' : 'game'
   const activeWordsByLength = poolMode === 'full' ? rawWordsByLength : gameplayWordsByLength
   const sourceWords = activeWordsByLength.get(wordLen) || []
 
   let candidates = sourceWords.filter((word) => {
     for (let index = 0; index < wordLen; index++) {
-      if (patternChars[index] !== '_' && word[index] !== patternChars[index]) {
-        return false
-      }
+      if (patternChars[index] !== '_' && word[index] !== patternChars[index]) return false
     }
-
     for (const wrongLetter of wrongLetters) {
-      if (word.includes(wrongLetter)) {
-        return false
-      }
+      if (word.includes(wrongLetter)) return false
     }
-
     return true
   })
 
@@ -552,46 +566,32 @@ async function aiExplain(pattern, wrongLetters, guessedLetters, difficulty = 'me
 
   const candidateCount = effectiveCandidates.length
   const guessedSet = new Set(guessedLetters.map((letter) => letter.toUpperCase()))
-
   const topCandidates = effectiveCandidates.slice(0, 5)
 
   const possibleLetters = new Set()
   for (const word of effectiveCandidates) {
     for (const char of word) {
-      if (!guessedSet.has(char)) {
-        possibleLetters.add(char)
-      }
+      if (!guessedSet.has(char)) possibleLetters.add(char)
     }
   }
 
   const letterScores = {}
-  
-  if (difficulty === 'hard') {
-    for (const letter of possibleLetters) {
-      const count = effectiveCandidates.filter((w) => w.includes(letter)).length
-      letterScores[letter] = Number((count / candidateCount).toFixed(3))
-    }
-  } else if (difficulty === 'easy') {
-    for (const letter of possibleLetters) {
-      const count = effectiveCandidates.filter((w) => w.includes(letter)).length
-      letterScores[letter] = Number((count / candidateCount).toFixed(3))
-    }
-  } else {
-    for (const letter of possibleLetters) {
-      const count = effectiveCandidates.filter((w) => w.includes(letter)).length
-      const normalizedFrequency = count / candidateCount
-      letterScores[letter] = Number(normalizedFrequency.toFixed(3))
-    }
+  for (const letter of possibleLetters) {
+    const count = effectiveCandidates.filter((w) => w.includes(letter)).length
+    letterScores[letter] = Number((count / candidateCount).toFixed(3))
   }
 
-  const { letter: chosenLetter, wordInDictionary } = await aiGuess(pattern, wrongLetters, guessedLetters, difficulty, mode)
+  const { letter: chosenLetter, wordInDictionary } = await aiGuess(
+    pattern,
+    wrongLetters,
+    guessedLetters,
+    difficulty,
+    mode
+  )
 
-  let strategy = 'Letter frequency'
-  if (difficulty === 'hard') {
-    strategy = 'Candidate Letter Frequency'
-  } else if (difficulty === 'easy') {
-    strategy = 'Randomized Frequency'
-  }
+  let strategy = 'Candidate Letter Frequency'
+  if (difficulty === 'easy') strategy = 'Randomized Frequency'
+  if (candidateCount === 0) strategy = 'Character N-gram language model (out-of-dictionary fallback)'
 
   return {
     candidatesRemaining: candidateCount,
