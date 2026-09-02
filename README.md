@@ -1,6 +1,6 @@
-# Hangman AI 🕵️‍♂️🔍
+# Hangman AI
 
-A full-stack, real-time Noir Detective Hangman web application featuring a character-level Statistical N-Gram Language Model, an unlockable **4-Tier Character Companion Progression System**, real-time WebSockets multiplayer, an interactive 3D animated game board, and a live AI Reasoning Explainer dashboard.
+A full-stack, real-time Noir Detective Hangman web application featuring a character-level Statistical N-Gram Language Model, an unlockable 4-Tier Character Companion Progression System, real-time WebSockets multiplayer, an interactive 3D animated game board, and a live AI Reasoning Explainer dashboard.
 
 Live Demo: https://hangman-ai-orpin.vercel.app/
 
@@ -8,7 +8,7 @@ Live Demo: https://hangman-ai-orpin.vercel.app/
 
 ## Technology Stack
 
-- **Frontend:** React 19, Vite, TailwindCSS, Three.js (@react-three/fiber & @react-three/drei), Lucide Icons, Canvas Confetti.
+- **Frontend:** React 19, Vite, TailwindCSS, Three.js (@react-three/fiber & @react-three/drei).
 - **Backend:** Node.js, Express, Socket.IO, Zod schema validation.
 - **AI Linguistic Engine:** Character-level Statistical N-Gram Language Model (Order-2 -> Order-1 -> Positional -> Global backoff) with candidate entropy filtering and dynamic learning memory.
 - **Data & APIs:** 220k-word English dictionary, curated 1,968-word game dictionary, live Datamuse Lexical API, and MongoDB Atlas (with automatic in-memory fallback).
@@ -17,14 +17,14 @@ Live Demo: https://hangman-ai-orpin.vercel.app/
 
 ## 4-Tier Inspector Progression & Character Abilities
 
-Players can choose their active companion investigator from the **Inspector Directory (`/inspectors`)**. Higher tiers unlock through career win milestones, granting active in-game investigative powers!
+Players can choose their active companion investigator from the Inspector Directory (`/inspectors`). Higher tiers unlock through career win milestones, granting active in-game investigative powers:
 
 | Level | Character | Unlock Milestone | Special Ability | Mechanical In-Game Effect | Voice & Style |
 | :---: | :--- | :---: | :--- | :--- | :--- |
-| **LVL 1** | **🧽 SpongeBob** | **0 Wins (Default)** | **None (Rookie Mascot)** | Baseline detective companion. Rule reminders, countdowns, and dialogue with no active powers. | *"I'm ready! I'm ready! Let's crack this case!"* |
-| **LVL 2** | **🍌 Minion** | **2 Career Wins** 🔒 | **Banana Strike Shield** | Absorbs 1 wrong strike penalty per game without losing an attempt. | 100% Authentic Minionese (*"Bello! Baboi tulaliloo papoy banana!"*) |
-| **LVL 3** | **🐱 Doraemon** | **5 Career Wins** 🔒 | **Pocket Letter Probe** | Scans candidate dictionary and automatically exposes 1 correct letter position for free. | *"Deploying Future-Vision Letter Probe from my 4D pocket!"* |
-| **LVL 4** | **🕷️ Spider-Man** | **10 Career Wins** 🔒 | **Spider-Sense Purge** | Scans and permanently webs up (`🕸️`) 3 wrong trap letters on the typewriter keyboard. | *"My spider-sense is tingling. That letter is a trap!"* |
+| **LVL 1** | **SpongeBob** | **0 Wins (Default)** | **None (Rookie Mascot)** | Baseline detective companion. Rule reminders, countdowns, and dialogue with no active powers. | *"I'm ready! I'm ready! Let's crack this case!"* |
+| **LVL 2** | **Minion** | **2 Career Wins** | **Banana Strike Shield** | Absorbs 1 wrong strike penalty per game without losing an attempt. | 100% Authentic Minionese (*"Bello! Baboi tulaliloo papoy banana!"*) |
+| **LVL 3** | **Doraemon** | **5 Career Wins** | **Pocket Letter Probe** | Scans candidate dictionary and automatically exposes 1 correct letter position for free. | *"Deploying Future-Vision Letter Probe from my 4D pocket!"* |
+| **LVL 4** | **Spider-Man** | **10 Career Wins** | **Spider-Sense Purge** | Scans and permanently webs up 3 wrong trap letters on the typewriter keyboard. | *"My spider-sense is tingling. That letter is a trap!"* |
 
 ---
 
@@ -156,7 +156,7 @@ hangman-ai/
 │   ├── socket/          # Socket.IO multiplayer room engine
 │   └── test/            # 26 automated regression tests
 ├── frontend/
-│   ├── src/components/  # NoirCartoonAvatar, InspectorGuide, 3D Gallows, Keyboard, Modals
+│   ├── src/components/  # NoirCartoonAvatar, InspectorGuide, CharacterModel, HangmanScene, Keyboard, ResultModal, AuthModal
 │   ├── src/context/     # Auth and theme context providers
 │   ├── src/hooks/       # Custom hooks (useStreak, useSounds, useSocket)
 │   ├── src/pages/       # Route views (Home, Game, InspectorModels, MultiplayerLobby)
