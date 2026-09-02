@@ -26,7 +26,7 @@ yarn-error.log*
 Thumbs.db
 
 # Documentation (kept locally)
-# docs/
+docs/
 
 # Editor files
 .vscode/settings.json
@@ -37,8 +37,9 @@ Thumbs.db
 # Test output
 coverage/
 
-# Large dictionary files
+# Large dictionary and local runtime data files
 backend/data/google-10000-english.txt
+backend/data/ai_learning.json
 
 # Presentation assets
 ppt images/

@@ -29,8 +29,18 @@ function loadLearning() {
 }
 
 function saveLearning() {
+  if (process.env.NODE_ENV === 'test') return
   try { fs.writeFileSync(LEARNING_PATH, JSON.stringify(learningStore, null, 2)) } catch {}
 }
+
+function __setLearningForTests(data) {
+  learningStore = data
+}
+
+function __resetLearningForTests() {
+  learningStore = {}
+}
+
 
 // Called after each LOSS to record which letters were wasted
 function recordLoss(wordLength, wrongLetters) {
@@ -631,5 +641,7 @@ module.exports = {
   recordLoss,
   __setDictionaryForTests,
   __resetDictionaryForTests,
+  __setLearningForTests,
+  __resetLearningForTests,
   dictionaryMeta,
 }
