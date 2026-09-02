@@ -62,8 +62,9 @@ function recordLoss(wordLength, wrongLetters) {
 function getLearningPenalty(letter, wordLength) {
   const key = String(wordLength)
   const penalty = learningStore[key]?.[letter] || 0
-  // Max 40% reduction in score; penalty of 5 = full 40% reduction
-  return 1.0 - Math.min(penalty / 5, 0.4)
+  if (!penalty) return 1.0
+  // Dynamic adaptation: 1 loss = 35% drop, 2 losses = 70% drop, 3+ losses = 95% drop (forces AI to pivot to alternative letters)
+  return Math.max(1.0 - (penalty * 0.35), 0.05)
 }
 
 loadLearning()
@@ -583,7 +584,7 @@ async function aiExplain(pattern, wrongLetters, guessedLetters, difficulty = 'me
     }
   }
 
-  const { letter: chosenLetter, wordInDictionary } = await aiGuess(pattern, wrongLetters, guessedLetters, difficulty)
+  const { letter: chosenLetter, wordInDictionary } = await aiGuess(pattern, wrongLetters, guessedLetters, difficulty, mode)
 
   let strategy = 'Letter frequency'
   if (difficulty === 'hard') {

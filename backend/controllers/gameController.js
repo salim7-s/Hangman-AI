@@ -117,7 +117,13 @@ async function makeGuess(req, res) {
     // player-vs-ai: human set the word, AI is guessing automatically
     if (game.mode === 'player-vs-ai' && game.status === 'ongoing') {
       // Small safeguard: if AI already won/lost, do nothing. But status is ongoing.
-      const { letter: aiLetter, candidateCount, wordInDictionary, usedExternalApi } = await aiGuess(game.maskedWord, game.wrongGuesses, game.guesses, game.difficulty)
+      const { letter: aiLetter, candidateCount, wordInDictionary, usedExternalApi } = await aiGuess(
+        game.maskedWord,
+        game.wrongGuesses,
+        game.guesses,
+        game.difficulty,
+        game.mode
+      )
       aiGuessResult = { letter: aiLetter, candidateCount, wordInDictionary, usedExternalApi }
       
       if (!game.guesses.includes(aiLetter)) {
