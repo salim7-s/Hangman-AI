@@ -15,13 +15,25 @@ const authRoutes = require('./routes/authRoutes')
 const setupSocket = require('./socket/gameSocket')
 
 const PORT       = process.env.PORT || 5000
-const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173'
+const allowedOrigins = process.env.CLIENT_URL
+  ? process.env.CLIENT_URL.split(',').map((s) => s.trim())
+  : ['http://localhost:5173']
 
-const app    = express()
-const server = http.createServer(app)
+function isOriginAllowed(origin) {
+  if (!origin) return true
+  if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) return true
+  try {
+    const hostname = new URL(origin).hostname
+    if (/\.(vercel\.app|netlify\.app|onrender\.com|github\.io)$/.test(hostname)) return true
+  } catch {
+    return true
+  }
+  return true
+}
+
 const io     = new Server(server, {
   cors: {
-    origin: CLIENT_URL,
+    origin: (origin, callback) => callback(null, isOriginAllowed(origin)),
     methods: ['GET', 'POST'],
     credentials: true,
   },
@@ -32,7 +44,7 @@ app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }))
 
 // ── CORS ───────────────────────────────────────────────────────────────────
 app.use(cors({
-  origin: CLIENT_URL,
+  origin: (origin, callback) => callback(null, isOriginAllowed(origin)),
   credentials: true,
   allowedHeaders: ['Content-Type', 'Authorization'],
 }))
