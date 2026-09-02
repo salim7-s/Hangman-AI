@@ -60,7 +60,7 @@ const DEATH_OFFSETS = {
 const INK   = '#1e1a17'
 const PAPER = '#efe5d4'
 
-function PartMesh({ partKey, isDead, isAppearing }) {
+function PartMesh({ partKey, isDead }) {
   const meshRef = useRef()
   const def = PARTS[partKey]
   const death = DEATH_OFFSETS[partKey]

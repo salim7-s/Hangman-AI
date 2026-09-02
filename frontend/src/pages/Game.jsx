@@ -51,7 +51,10 @@ export default function Game() {
   const [shieldActive, setShieldActive] = useState(false)
   const [eliminatedLetters, setEliminatedLetters] = useState([])
   const shieldActiveRef = useRef(false)
-  shieldActiveRef.current = shieldActive
+
+  useEffect(() => {
+    shieldActiveRef.current = shieldActive
+  }, [shieldActive])
 
 
   useEffect(() => {

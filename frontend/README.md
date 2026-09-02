@@ -1,29 +1,29 @@
 # Frontend Documentation
 
-This frontend is a React 19 + Vite application for the Hangman AI project.
+This frontend is a React 19 + Vite application for the Noir Detective Hangman AI project.
 
 ## Responsibilities
 
 The frontend handles:
-
-- Mode selection and routing
-- Game board rendering
-- Keyboard input
-- Multiplayer lobby interactions
-- 3D character and scene rendering
-- Auth state persistence in the client
-- API and socket communication with the backend
+- Mode selection and routing (Solo, Reverse AI, Local Duel, Multiplayer, Inspector Roster)
+- Interactive typewriter keyboard input with Spider-Sense letter purges
+- 4-Tier character companion selection, progression locks, and live special abilities
+- Real-time multiplayer lobby interactions and chat synchronization
+- Interactive 3D Three.js canvas for progressive gallows suspect sketches
+- Live AI Reasoning Explainer drawer with candidate counts and entropy scores
+- Client-side auth, streak persistence, and sound effects
 
 ## Main Folders
 
 | Path | Purpose |
 | --- | --- |
-| `src/pages/` | Route-level screens such as `Home`, `Game`, and `MultiplayerLobby` |
-| `src/components/` | Reusable UI and scene components |
-| `src/hooks/` | Custom hooks for socket, sound, and streak logic |
-| `src/context/` | Authentication state and provider logic |
-| `src/services/` | API client and runtime configuration helpers |
-| `public/` | Static assets such as SVG icons and favicon |
+| `src/pages/` | Route-level screens: `Home.jsx`, `Game.jsx`, `InspectorModels.jsx`, `MultiplayerLobby.jsx` |
+| `src/components/` | Reusable UI: `InspectorGuide.jsx`, `NoirCartoonAvatar.jsx`, `HangmanScene.jsx`, `Keyboard.jsx`, `ResultModal.jsx`, `AuthModal.jsx` |
+| `src/hooks/` | Custom hooks: `useStreak.js`, `useSounds.js`, `useSocket.js` |
+| `src/context/` | Authentication state and theme provider logic |
+| `src/services/` | Axios API client and runtime configuration helpers |
+| `src/utils/` | Character tiers, unlock milestones, and Minionese dialogues (`characters.js`) |
+| `public/` | Static assets, inspector transparent sprites, and favicon |
 
 ## Run Locally
 
@@ -33,55 +33,40 @@ npm install
 npm run dev
 ```
 
-Default dev URL:
+Default dev URL: `http://localhost:5173`
 
-- `http://localhost:5173`
-
-## Environment Variable
+## Environment Variables
 
 Create `frontend/.env`:
-
 ```env
 VITE_API_URL=http://localhost:5000
 ```
-
-This value should point to the backend base URL.
 
 ## Scripts
 
 - `npm run dev`: start Vite dev server
 - `npm run build`: create production build
 - `npm run preview`: preview built output locally
-- `npm run lint`: run ESLint
+- `npm run lint`: run ESLint checks
 
-## Important Pages
+## Important Pages & Components
 
-### `src/pages/Home.jsx`
+### `src/pages/InspectorModels.jsx`
+- 4-tier companion selection catalog with career win milestones and active power previews.
 
-- Entry page for selecting game modes and app navigation
+### `src/components/InspectorGuide.jsx`
+- Floating companion mascot with reactive speech bubble, Minionese language, and in-game ability activation.
 
 ### `src/pages/Game.jsx`
-
-- Main single-player and local-duel gameplay page
-- Talks to REST endpoints in the backend
+- Main gameplay page integrating 3D Gallows (`HangmanScene`), Typewriter Keyboard, AI Explainer drawer, and Companion powers.
 
 ### `src/pages/MultiplayerLobby.jsx`
-
-- Handles room creation, join flow, and real-time multiplayer state
-- Uses Socket.io events instead of the REST game routes
-
-## Related Backend Areas
-
-When working on frontend gameplay, the backend files most likely involved are:
-
-- `backend/routes/gameRoutes.js`
-- `backend/controllers/gameController.js`
-- `backend/socket/gameSocket.js`
+- Real-time 1v1 WebSocket match lobby with shared chat, live reconnection, and classic deduction rules.
 
 ## More Documentation
 
 For broader project documentation, see:
-
+- [`../README.md`](../README.md)
 - [`../docs/README.md`](../docs/README.md)
+- [`../docs/game_modes.md`](../docs/game_modes.md)
 - [`../docs/local_development.md`](../docs/local_development.md)
-- [`../docs/socket_multiplayer.md`](../docs/socket_multiplayer.md)
