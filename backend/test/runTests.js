@@ -25,13 +25,10 @@ async function main() {
   }
 
   console.log(`\nSummary: ${passed} passed, ${failed} failed`)
-
-  if (failed > 0) {
-    process.exitCode = 1
-  }
+  process.exit(failed > 0 ? 1 : 0)
 }
 
 main().catch((error) => {
   console.error('Test runner failed:', error)
-  process.exitCode = 1
+  process.exit(1)
 })

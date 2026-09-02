@@ -7,12 +7,16 @@ let GameModel = null
 
 const MEM_GAME_TTL_MS = 2 * 60 * 60 * 1000 // 2 hours
 
-setInterval(() => {
+const cleanupInterval = setInterval(() => {
   const cutoff = Date.now() - MEM_GAME_TTL_MS
   for (const [id, game] of Object.entries(memGames)) {
     if (game.createdAt < cutoff) delete memGames[id]
   }
 }, 30 * 60 * 1000) // run every 30 minutes
+
+if (cleanupInterval.unref) {
+  cleanupInterval.unref()
+}
 
 function resetInMemoryGames() {
   for (const key of Object.keys(memGames)) {

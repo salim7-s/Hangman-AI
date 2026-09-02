@@ -426,7 +426,10 @@ async function fetchDatamuseCandidates(patternChars, wrongLetters) {
       )
 
     datamuse_cache.set(cacheKey, candidates)
-    setTimeout(() => datamuse_cache.delete(cacheKey), 5 * 60 * 1000)
+    const cacheTimer = setTimeout(() => datamuse_cache.delete(cacheKey), 5 * 60 * 1000)
+    if (cacheTimer.unref) {
+      cacheTimer.unref()
+    }
 
     return candidates
   } catch (err) {
